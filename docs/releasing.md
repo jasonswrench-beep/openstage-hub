@@ -15,7 +15,17 @@ The repository must be **public** before any hub can download the catalog or its
 1. Raise `RELEASE` in `tools/build-installer.mjs`, and the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`, to the new version (such as `1.0.1`). The build stops if they differ.
 2. Run the checks: `npm test`, `npm run typecheck`, and `cargo test` in `src-tauri`.
 3. Commit and push.
-4. On the owner's computer, signed in to the signing service with its settings in the environment (the top of `tools/sign_windows.py` names them): `node tools/build-installer.mjs --sign`. It stops on any problem: a missing hub key, a program that names this computer's user folder, an installer that would download the web view's setup, or a program in the setup that is not signed and timestamped. It writes `src-tauri/target/release-files/OpenStage-Hub-<version>-Setup.exe` and its `.sha256.txt`, and says whether the setup is under 8 MB.
+4. On the owner's computer, signed in to the signing service (`az login`), in a PowerShell window where the four signing settings are set first. They are the same account and profile names every OpenStage app is signed with; they are not secret, but they are kept out of this public repository, so take them from your own notes:
+
+   ```powershell
+   $env:OPENSTAGE_SIGN_ENDPOINT = "<the account's address>"
+   $env:OPENSTAGE_SIGN_ACCOUNT = "<the signing account>"
+   $env:OPENSTAGE_SIGN_PROFILE = "<the certificate profile>"
+   $env:OPENSTAGE_SIGN_PUBLISHER = "Jason Wrench"
+   node tools/build-installer.mjs --sign
+   ```
+
+   Without them the build stops at once with "these are not set". It stops on any problem: a missing hub key, a program that names this computer's user folder, an installer that would download the web view's setup, or a program in the setup that is not signed and timestamped. It writes `src-tauri/target/release-files/OpenStage-Hub-<version>-Setup.exe` and its `.sha256.txt`, and says whether the setup is under 8 MB.
 5. Make the release with exactly those two files, tagged `v<version>` at the pushed commit, with notes in plain words: what changed, who signed it, the SHA-256, and what has not been tried.
 6. Run **Update OpenStage Catalog.bat**, so the catalog's hub entry names the new release. Installed hubs then offer the update.
 
