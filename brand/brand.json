@@ -1,0 +1,28 @@
+{
+  "_about": "Every value that makes this program OpenStage Hub rather than Prism Hub. Nothing brand-specific lives anywhere else. After changing it, run tools/apply-brand.mjs (Build OpenStage Hub.bat does) so the program's settings and icons follow.",
+  "productName": "OpenStage Hub",
+  "shortName": "OpenStage",
+  "identifier": "org.openstage.hub",
+  "programName": "openstage-hub",
+  "startMenuFolder": "OpenStage",
+  "publisher": "Jason Wrench",
+  "icon": "brand/OpenStage-Suite.svg",
+  "colors": {
+    "brand": "#B18FFC",
+    "navy": "#102037",
+    "accentLight": "#5B3FC4",
+    "accentDark": "#B18FFC"
+  },
+  "repository": "jasonswrench-beep/openstage-hub",
+  "catalog": {
+    "tag": "catalog",
+    "file": "openstage-catalog.json",
+    "signature": "openstage-catalog.json.sig"
+  },
+  "catalogPublicKey": "h5cCTTEu/3CCO6WxUVGQKhkMzc1jtbzTseujqgxIo5U=",
+  "expectedSigner": "Jason Wrench",
+  "sibling": {
+    "label": "Also from Jason Wrench: Prism Hub",
+    "url": "https://github.com/jasonswrench-beep/prism-hub/releases"
+  }
+}

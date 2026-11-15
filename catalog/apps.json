@@ -1,0 +1,141 @@
+{
+  "_about": "The fixed facts about each app that GitHub cannot tell the catalog script: its mark, how Windows lists it, its program file and its installer's quiet switch. Update OpenStage Catalog.bat adds each app's newest stable and preview release (address, SHA-256, size) and writes the signed catalog. docs/catalog.md explains every field.",
+  "minimumHubVersion": "1.0.0",
+  "hub": {
+    "repository": "jasonswrench-beep/openstage-hub",
+    "setupPattern": "^OpenStage-Hub-.*-Setup\\.exe$"
+  },
+  "apps": [
+    {
+      "id": "openstage-author",
+      "name": "OpenStage Author",
+      "mark": { "letters": "au", "color": "#5B3FC4" },
+      "description": "The main authoring studio",
+      "repository": "jasonswrench-beep/openstage-author",
+      "installedAs": "OpenStage Author",
+      "programFile": "openstage-editor.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenStage-Author.*[Ss]etup\\.exe$"
+    },
+    {
+      "id": "openstage-recorder",
+      "name": "OpenStage Recorder",
+      "mark": { "letters": "re", "color": "#B42318" },
+      "description": "A light screen recorder with a simple editor",
+      "repository": "jasonswrench-beep/openstage-recorder",
+      "installedAs": "OpenStage Recorder",
+      "programFile": "openstage-recorder.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenStage[-.]Recorder.*[Ss]etup\\.exe$",
+      "extras": [
+        { "name": "Portable copy", "description": "Runs without installing", "pattern": "^OpenStage-Recorder.*portable\\.zip$" }
+      ]
+    },
+    {
+      "id": "openassess",
+      "name": "OpenAssess",
+      "mark": { "letters": "as", "color": "#0F7B6C" },
+      "description": "Turns test banks into LMS-ready quizzes",
+      "repository": "jasonswrench-beep/openstage-assess",
+      "installedAs": "OpenAssess",
+      "programFile": "openassess-shell.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenAssess.*[Ss]etup\\.exe$"
+    },
+    {
+      "id": "openexplainer",
+      "name": "OpenExplainer",
+      "mark": { "letters": "ex", "color": "#6B5BD2" },
+      "description": "Still-image tutorials and how-to books",
+      "repository": "jasonswrench-beep/OpenExplainer",
+      "installedAs": "OpenExplainer",
+      "programFile": "openexplainer.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenExplainer.*[Ss]etup\\.exe$",
+      "ignoreTags": ["v0.1.1", "v0.1.0"],
+      "_ignoreTags": "Published before code signing began (OpenExplainer signs from 0.2.0 alpha 3), so the hub cannot install them. Remove a tag here if that release is re-published signed."
+    },
+    {
+      "id": "openstage-capture-express",
+      "name": "OpenStage Capture Express",
+      "mark": { "letters": "ce", "color": "#B54708" },
+      "description": "Step-by-step guide maker",
+      "repository": "jasonswrench-beep/openstage-capture-express",
+      "installedAs": "OpenStage Capture Express",
+      "programFile": "openstage-capture-express.exe",
+      "quietSwitch": ["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER"],
+      "quietUninstallSwitch": ["/SILENT", "/SUPPRESSMSGBOXES"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenStage-Capture-Express.*[Ss]etup\\.exe$"
+    },
+    {
+      "id": "openstage-guide",
+      "name": "OpenStage Guide",
+      "mark": { "letters": "gu", "color": "#1D6FB8" },
+      "description": "Facilitator guides and participant workbooks",
+      "repository": "jasonswrench-beep/OpenStageGuide",
+      "installedAs": "OpenStage Guide",
+      "programFile": "openstage-guide-shell.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenStage-Guide.*[Ss]etup\\.exe$"
+    },
+    {
+      "id": "pdf-remediator",
+      "name": "PDF Remediator",
+      "mark": { "letters": "pd", "color": "#C11574" },
+      "description": "Drafts accessibility repairs for PDFs",
+      "repository": "jasonswrench-beep/PDFRemediator",
+      "installedAs": "PDF Remediator",
+      "programFile": "PDF Remediator.exe",
+      "quietSwitch": ["/S"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^PDF-Remediator.*Setup\\.exe$"
+    },
+    {
+      "id": "openstage-studio",
+      "name": "OpenStage Studio",
+      "mark": { "letters": "st", "color": "#0E6E8C" },
+      "description": "Narrated, captioned tutorial videos from a script",
+      "repository": "jasonswrench-beep/OpenStage_Studio",
+      "installedAs": "OpenStage Studio",
+      "programFile": "openstage-studio.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenStage[-. _]Studio.*[Ss]etup\\.exe$",
+      "comingSoonUntilReleased": true,
+      "_comingSoonUntilReleased": "Listed under Coming soon until its repository is public and has a published, signed release; then the catalog script moves it to Desktop by itself."
+    }
+  ],
+  "web": [
+    {
+      "id": "openstage-website",
+      "name": "OpenStage website",
+      "description": "openstageauthor.com",
+      "url": "https://openstageauthor.com"
+    },
+    {
+      "id": "roadmap",
+      "name": "Roadmap and feature requests",
+      "description": "See what is planned and ask for something",
+      "url": "https://app.productbridge.io/widget/784db895-cb64-45f4-9bde-4645df4aa083?tab=roadmap"
+    },
+    {
+      "id": "openscroll",
+      "name": "OpenScroll",
+      "description": "Block-based eLearning in the browser",
+      "url": ""
+    },
+    {
+      "id": "tutorials",
+      "name": "Tutorial videos",
+      "description": "How-to videos for the OpenStage apps",
+      "url": ""
+    }
+  ],
+  "comingSoon": []
+}
