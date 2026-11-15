@@ -60,7 +60,21 @@ pub struct App {
     pub extras: Vec<Extra>,
     #[serde(default)]
     pub minimum_hub_version: Option<String>,
+    /// The app's own icon, published beside the catalog. Without one (or until it is fetched) the round mark is shown.
+    #[serde(default)]
+    pub icon: Option<Asset>,
 }
+
+/// A small file published on the catalog's own release (an app's icon), with its SHA-256.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Asset {
+    pub url: String,
+    pub sha256: String,
+    pub size: u64,
+}
+
+/// The most an icon may be.
+pub const MOST_ICON_BYTES: u64 = 256 * 1024;
 
 fn default_uninstall_switch() -> Vec<String> {
     vec!["/S".into()]
@@ -114,6 +128,8 @@ pub struct ComingSoon {
     /// The app's own mark, when it has one already (an app still being made, such as OpenStage Studio).
     #[serde(default)]
     pub mark: Option<Mark>,
+    #[serde(default)]
+    pub icon: Option<Asset>,
 }
 
 /// Checks the signature (Ed25519 over the exact bytes of the file; the signature file holds it in base64) with the built-in public key.
@@ -202,6 +218,12 @@ pub fn validate(c: &Catalog) -> Result<(), String> {
     for s in &c.coming_soon {
         if !plain_id(&s.id) || s.mark.as_ref().is_some_and(|m| !hex_color(&m.color) || m.letters.chars().count() > 2) {
             return bad(format!("coming soon {:?}", s.id));
+        }
+    }
+    // Icons come only from the hub's own catalog release, like the catalog itself.
+    for icon in c.apps.iter().filter_map(|a| a.icon.as_ref()).chain(c.coming_soon.iter().filter_map(|s| s.icon.as_ref())) {
+        if !in_releases(&icon.url, &crate::brand::brand().repository) || !sha256_text(&icon.sha256) || icon.size == 0 || icon.size > MOST_ICON_BYTES {
+            return bad(format!("an icon ({})", icon.url));
         }
     }
     for w in &c.web {
@@ -323,6 +345,7 @@ pub mod tests {
             preview: preview.map(|v| release(&repo, v)),
             extras: vec![],
             minimum_hub_version: None,
+            icon: None,
         }
     }
 
@@ -372,6 +395,15 @@ pub mod tests {
         let mut twice = good.clone();
         twice.apps.push(twice.apps[0].clone());
         assert!(validate(&twice).is_err(), "two apps with one id");
+        let repo = &crate::brand::brand().repository;
+        let icon = |url: String, size: u64| Asset { url, sha256: "cd".repeat(32), size };
+        let mut with_icon = good.clone();
+        with_icon.apps[0].icon = Some(icon(format!("https://github.com/{repo}/releases/download/catalog/icon-openexplainer.png"), 9000));
+        assert_eq!(validate(&with_icon), Ok(()), "an icon on the hub's own catalog release");
+        with_icon.apps[0].icon = Some(icon("https://github.com/someone/openexplainer/releases/download/v1/icon.png".into(), 9000));
+        assert!(validate(&with_icon).is_err(), "an icon from anywhere but the hub's repository");
+        with_icon.apps[0].icon = Some(icon(format!("https://github.com/{repo}/releases/download/catalog/big.png"), MOST_ICON_BYTES + 1));
+        assert!(validate(&with_icon).is_err(), "an icon too large");
         let mut web = good.clone();
         web.web.push(WebLink { id: "site".into(), name: "Site".into(), description: String::new(), url: "javascript:alert(1)".into() });
         assert!(validate(&web).is_err());

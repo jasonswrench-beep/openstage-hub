@@ -108,6 +108,11 @@ export function changes(before, after) {
   const webBefore = JSON.stringify(before?.web ?? []);
   const webAfter = JSON.stringify(after.web);
   if (webBefore !== webAfter) rows.push({ name: "Web links", before: `${(before?.web ?? []).length}`, now: `${after.web.length}`, changed: true });
+  const iconsOf = (c) => JSON.stringify([...(c?.apps ?? []), ...(c?.comingSoon ?? [])].map((a) => a.icon?.sha256 ?? null));
+  if (iconsOf(before) !== iconsOf(after)) {
+    const count = (c) => `${[...(c?.apps ?? []), ...(c?.comingSoon ?? [])].filter((a) => a.icon).length}`;
+    rows.push({ name: "Icons", before: count(before), now: count(after), changed: true });
+  }
   if (JSON.stringify(before?.comingSoon ?? []) !== JSON.stringify(after.comingSoon)) {
     rows.push({ name: "Coming soon", before: `${(before?.comingSoon ?? []).length}`, now: `${after.comingSoon.length}`, changed: true });
   }

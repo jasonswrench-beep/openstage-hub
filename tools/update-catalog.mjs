@@ -16,7 +16,7 @@
 // catalog/work/checked.json by GitHub's own SHA-256 of each file, so a setup file is downloaded once, not on every run.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
@@ -107,6 +107,27 @@ async function checked(asset, url, expectedSigner, what, memory) {
   }
 }
 
+/** Icons to upload beside the catalog: published name and source file. */
+const icons = [];
+
+/** An app's icon (catalog/<icon>), published beside the catalog as icon-<id>.png, with its SHA-256. */
+function iconEntry(source) {
+  if (!source.icon) return null;
+  const file = join(root, "catalog", source.icon);
+  if (!existsSync(file)) {
+    problems.push(`${source.name}: its icon ${source.icon} is not in catalog/.`);
+    return null;
+  }
+  const bytes = readFileSync(file);
+  if (!bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) || bytes.length > 256 * 1024) {
+    problems.push(`${source.name}: its icon must be a PNG of at most 256 KB.`);
+    return null;
+  }
+  const name = `icon-${source.id}.png`;
+  icons.push({ name, file });
+  return { url: downloadUrl(brand.repository, brand.catalog.tag, name), sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length };
+}
+
 async function buildCatalog(memory) {
   const apps = [];
   const comingSoon = [...sources.comingSoon];
@@ -119,7 +140,7 @@ async function buildCatalog(memory) {
       const visibility = gh(["repo", "view", source.repository, "--json", "visibility"]).visibility;
       if ((!stable && !preview) || visibility !== "PUBLIC") {
         say(`  Coming soon (${visibility !== "PUBLIC" ? `its repository is ${visibility.toLowerCase()}` : "no published release yet"})`);
-        comingSoon.push({ id: source.id, name: source.name, description: source.description ?? "", mark: source.mark });
+        comingSoon.push({ id: source.id, name: source.name, description: source.description ?? "", mark: source.mark, icon: iconEntry(source) });
         continue;
       }
     }
@@ -149,7 +170,9 @@ async function buildCatalog(memory) {
       extras.push({ name: x.name, description: x.description ?? "", fileName: asset.name, url: downloadUrl(source.repository, release.tag_name, asset.name), sha256: sha256(file), size: asset.size });
       rmSync(file, { force: true });
     }
-    apps.push(appEntry(source, stableEntry, previewEntry, extras));
+    const built = appEntry(source, stableEntry, previewEntry, extras);
+    built.icon = iconEntry(source);
+    apps.push(built);
   }
 
   // The hub's own newest release (its catalog release is not a version, so it never counts).
@@ -229,6 +252,11 @@ async function main(argv) {
   const signatureFile = join(out, brand.catalog.signature);
   writeFileSync(catalogFile, bytes);
   writeFileSync(signatureFile, signature);
+  const iconFiles = icons.map((i) => {
+    const target = join(out, i.name);
+    copyFileSync(i.file, target);
+    return target;
+  });
   say(`Signed: catalog/out/${brand.catalog.file} and its signature.`);
   if (local) {
     say("--local: not uploaded. A development hub reads this folder when HUB_CATALOG_DIR names it.");
@@ -245,6 +273,8 @@ async function main(argv) {
     );
   }
   // Both in one upload. A hub that fetches between the two files sees a mismatch and keeps its last good catalog until its next check.
+  // The icons first: a hub that reads the new catalog then finds every icon it names.
+  if (iconFiles.length) gh(["release", "upload", brand.catalog.tag, ...iconFiles, "--repo", brand.repository, "--clobber"], { json: false });
   gh(["release", "upload", brand.catalog.tag, signatureFile, catalogFile, "--repo", brand.repository, "--clobber"], { json: false });
   say(`Published to https://github.com/${brand.repository}/releases/tag/${brand.catalog.tag}`);
 }

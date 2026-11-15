@@ -150,6 +150,19 @@ function pretend(id: string) {
   },
 };
 
+// The apps' real icons from catalog/icons, as the hub hands them to the window (data: addresses). Capture Express keeps its round mark,
+// to show how a row looks when its icon has not been fetched.
+async function dataUrl(path: string): Promise<string | null> {
+  const answer = await fetch(path);
+  if (!answer.ok) return null;
+  const bytes = new Uint8Array(await answer.arrayBuffer());
+  let text = "";
+  for (const b of bytes) text += String.fromCharCode(b);
+  return `data:image/png;base64,${btoa(text)}`;
+}
+for (const a of view.apps) if (a.id !== "openstage-capture-express") a.icon = await dataUrl(`/catalog/icons/${a.id}.png`);
+for (const c of view.comingSoon) c.icon = await dataUrl(`/catalog/icons/${c.id}.png`);
+
 // The real page: its markup, then its code.
 const html = await (await fetch("/index.html")).text();
 const doc = new DOMParser().parseFromString(html, "text/html");

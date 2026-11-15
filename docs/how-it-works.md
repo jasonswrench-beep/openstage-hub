@@ -13,6 +13,7 @@ The hub reads one small signed file instead of asking GitHub about each app: the
 - Every address in it must be `https://github.com/<that app's repository>/releases/download/...`; every checksum, version, switch and file name is checked before it is used (`src-tauri/src/catalog.rs`).
 - A catalog older than the one already on disk is refused, so an old signed catalog cannot be replayed to offer older installers.
 - A catalog that needs a newer hub (`minimumHubVersion`, or a higher `format`) shows only the hub's update banner.
+- Each app's icon is published beside the catalog, on the same release, with its SHA-256 in the signed catalog. The hub fetches an icon once, keeps it only if its SHA-256 matches, and checks it again whenever it shows it. Until then, or if it fails a check, the row shows the app's round mark instead. Icons are decorative; the app's name is always text beside it.
 
 [catalog.md](catalog.md) has the format.
 
@@ -57,7 +58,7 @@ Closing the window quits the hub unless the tray is on; then the window is close
 
 ## When the network is used
 
-- When the window opens, and when the person presses Check for updates: the catalog and its signature (two small files).
+- When the window opens, and when the person presses Check for updates: the catalog and its signature (two small files), and any app icon not already on this computer.
 - While in the tray, once a day if that setting is on: the same two files. The thread wakes at most every six hours to look at the clock, because a computer that sleeps overnight does not count that time.
 - When the person presses Install, Update, Reinstall or Other downloads: that one file.
 

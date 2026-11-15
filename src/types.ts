@@ -14,7 +14,7 @@ export interface View {
   justUpdated: string | null;
   apps: AppView[];
   web: { id: string; name: string; description: string; url: string }[];
-  comingSoon: { id: string; name: string; description: string; mark?: { letters: string; color: string } | null }[];
+  comingSoon: { id: string; name: string; description: string; mark?: { letters: string; color: string } | null; icon?: string | null }[];
   updatesReady: number;
   settings: { offerPreviews: boolean; keepInTray: boolean; dailyCheck: boolean; askedStartWithWindows: boolean };
   startWithWindows: boolean;
@@ -28,6 +28,8 @@ export interface AppView {
   name: string;
   letters: string;
   color: string;
+  /** The app's own icon (a data: address), once fetched; otherwise the round mark is drawn. */
+  icon?: string | null;
   description: string;
   installed: { version: string; exact: boolean; folderKnown: boolean } | null;
   offer: { version: string; preview: boolean; size: number } | null;

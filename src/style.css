@@ -231,6 +231,14 @@ h2 {
   text-transform: lowercase;
 }
 
+/* An app's own icon, the same size as the round mark it replaces. */
+.app-icon {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+}
+
 .mark.web {
   background: var(--surface);
   color: var(--text);

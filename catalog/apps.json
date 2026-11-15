@@ -8,6 +8,7 @@
   "apps": [
     {
       "id": "openstage-author",
+      "icon": "icons/openstage-author.png",
       "name": "OpenStage Author",
       "mark": { "letters": "au", "color": "#5B3FC4" },
       "description": "The main authoring studio",
@@ -20,6 +21,7 @@
     },
     {
       "id": "openstage-recorder",
+      "icon": "icons/openstage-recorder.png",
       "name": "OpenStage Recorder",
       "mark": { "letters": "re", "color": "#B42318" },
       "description": "A light screen recorder with a simple editor",
@@ -35,6 +37,7 @@
     },
     {
       "id": "openassess",
+      "icon": "icons/openassess.png",
       "name": "OpenAssess",
       "mark": { "letters": "as", "color": "#0F7B6C" },
       "description": "Turns test banks into LMS-ready quizzes",
@@ -47,6 +50,7 @@
     },
     {
       "id": "openexplainer",
+      "icon": "icons/openexplainer.png",
       "name": "OpenExplainer",
       "mark": { "letters": "ex", "color": "#6B5BD2" },
       "description": "Still-image tutorials and how-to books",
@@ -61,6 +65,7 @@
     },
     {
       "id": "openstage-capture-express",
+      "icon": "icons/openstage-capture-express.png",
       "name": "OpenStage Capture Express",
       "mark": { "letters": "ce", "color": "#B54708" },
       "description": "Step-by-step guide maker",
@@ -74,6 +79,7 @@
     },
     {
       "id": "openstage-guide",
+      "icon": "icons/openstage-guide.png",
       "name": "OpenStage Guide",
       "mark": { "letters": "gu", "color": "#1D6FB8" },
       "description": "Facilitator guides and participant workbooks",
@@ -86,6 +92,7 @@
     },
     {
       "id": "pdf-remediator",
+      "icon": "icons/pdf-remediator.png",
       "name": "PDF Remediator",
       "mark": { "letters": "pd", "color": "#C11574" },
       "description": "Drafts accessibility repairs for PDFs",
@@ -98,6 +105,7 @@
     },
     {
       "id": "openstage-studio",
+      "icon": "icons/openstage-studio.png",
       "name": "OpenStage Studio",
       "mark": { "letters": "st", "color": "#0E6E8C" },
       "description": "Narrated, captioned tutorial videos from a script",

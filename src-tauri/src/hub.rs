@@ -2,7 +2,7 @@
 //! The hub's model: the last good catalog, this computer's installed apps, the settings and the policy, and from them what each row shows.
 
 use crate::brand::{brand, HUB_VERSION};
-use crate::catalog::{self, App, Catalog, ComingSoon, Release, WebLink};
+use crate::catalog::{self, App, Asset, Catalog, Mark, Release, WebLink};
 use crate::state::{self, Policy, Saved, Settings};
 use crate::system::{self, Installed};
 use crate::version;
@@ -85,6 +85,7 @@ impl Hub {
                         Fetch::Refused { message: "The catalog on GitHub is older than the one already on this computer, so it was not used.".into() }
                     } else {
                         let _ = keep(&bytes, &sig);
+                        fetch_icons(&fresh);
                         *self.catalog.lock().unwrap() = Some(fresh);
                         let mut saved = self.saved.lock().unwrap();
                         saved.last_check = Some(state::now());
@@ -114,7 +115,17 @@ impl Hub {
                 apps.push(app_view(app, &installed, &saved, previews_allowed));
             }
             web = c.web.clone();
-            coming_soon = c.coming_soon.clone();
+            coming_soon = c
+                .coming_soon
+                .iter()
+                .map(|s| ComingSoonView {
+                    id: s.id.clone(),
+                    name: s.name.clone(),
+                    description: s.description.clone(),
+                    mark: s.mark.clone(),
+                    icon: icon_data(s.icon.as_ref()),
+                })
+                .collect();
         }
         let hub_update = catalog
             .as_ref()
@@ -162,13 +173,24 @@ pub struct View {
     pub just_updated: Option<String>,
     pub apps: Vec<AppView>,
     pub web: Vec<WebLink>,
-    pub coming_soon: Vec<ComingSoon>,
+    pub coming_soon: Vec<ComingSoonView>,
     pub updates_ready: usize,
     pub settings: Settings,
     pub start_with_windows: bool,
     pub policy: PolicyView,
     pub jobs: Vec<String>,
     pub repository: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComingSoonView {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub mark: Option<Mark>,
+    /// The icon as a data: address the window can show, when it has been fetched.
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -193,6 +215,8 @@ pub struct AppView {
     pub name: String,
     pub letters: String,
     pub color: String,
+    /// The app's own icon as a data: address, when it has been fetched; otherwise the window draws the round mark.
+    pub icon: Option<String>,
     pub description: String,
     pub installed: Option<InstalledView>,
     pub offer: Option<OfferView>,
@@ -268,6 +292,7 @@ pub fn app_view(app: &App, installed: &[Installed], saved: &Saved, previews_allo
         name: app.name.clone(),
         letters: app.mark.letters.clone(),
         color: app.mark.color.clone(),
+        icon: icon_data(app.icon.as_ref()),
         description: app.description.clone(),
         installed: installed_view,
         offer: offer.map(|o| OfferView { version: o.version.clone(), preview: version::is_preview(&o.version), size: o.size }),
@@ -339,6 +364,51 @@ fn fetch_catalog() -> Result<(Vec<u8>, Vec<u8>, Catalog), Fetch> {
     };
     let fresh = check(&bytes, &sig).map_err(|message| Fetch::Refused { message })?;
     Ok((bytes, sig, fresh))
+}
+
+/// Fetches every icon the catalog names that is not on disk yet, keeps only those whose SHA-256 matches, and removes icons the catalog no
+/// longer names. A failed icon is simply left out (its row keeps the round mark); it never stops the catalog being used.
+fn fetch_icons(c: &Catalog) {
+    let dir = state::icons_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let wanted: Vec<&Asset> = c.apps.iter().filter_map(|a| a.icon.as_ref()).chain(c.coming_soon.iter().filter_map(|s| s.icon.as_ref())).collect();
+    for icon in &wanted {
+        let file = dir.join(format!("{}.png", icon.sha256.to_ascii_lowercase()));
+        if file.exists() {
+            continue;
+        }
+        let bytes = match local_catalog_dir() {
+            Some(local) => icon.url.rsplit('/').next().and_then(|name| std::fs::read(local.join(name)).ok()),
+            None => crate::net::get_bytes(&icon.url, catalog::MOST_ICON_BYTES as usize).ok(),
+        };
+        if let Some(bytes) = bytes.filter(|b| sha256_hex(b).eq_ignore_ascii_case(&icon.sha256)) {
+            let _ = state::write_atomic(&file, &bytes);
+        }
+    }
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            if !wanted.iter().any(|i| name == format!("{}.png", i.sha256.to_ascii_lowercase())) {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// An icon from disk as a data: address for the window (whose content security policy allows data: pictures), checked again as it is read.
+pub fn icon_data(icon: Option<&Asset>) -> Option<String> {
+    use base64::Engine;
+    let icon = icon?;
+    let bytes = std::fs::read(state::icons_dir().join(format!("{}.png", icon.sha256.to_ascii_lowercase()))).ok()?;
+    if !sha256_hex(&bytes).eq_ignore_ascii_case(&icon.sha256) || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return None;
+    }
+    Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
 }
 
 /// Anything left in the download folder from a run that ended part way.

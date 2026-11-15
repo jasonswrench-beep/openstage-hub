@@ -23,7 +23,8 @@ The facts GitHub cannot tell the script:
 | --- | --- |
 | `id` | Short name, lower case, used by the hub and the policy file |
 | `name` | As shown in the hub |
-| `mark` | `letters` (one or two) and `color` (`#RRGGBB`) for the round mark |
+| `mark` | `letters` (one or two) and `color` (`#RRGGBB`) for the round mark, shown until the app's icon has been fetched |
+| `icon` | The app's own icon, a PNG of at most 256 KB in `catalog/` (`icons/<id>.png`, 128 by 128, taken from the app's own icon files). The script publishes it beside the catalog as `icon-<id>.png` and puts its SHA-256 in the signed catalog |
 | `description` | One line |
 | `repository` | `owner/name` on GitHub |
 | `installedAs` | The name Windows lists in installed apps (DisplayName) |

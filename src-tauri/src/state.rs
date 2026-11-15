@@ -3,6 +3,7 @@
 //!   settings.json   the person's settings, which release of each app the hub installed, which new versions were already announced, and when
 //!                   the catalog was last fetched
 //!   catalog\        the last good catalog and its signature (checked again every time they are read)
+//!   icons\          the apps' icons named in the catalog, each checked against its SHA-256 when fetched and when read
 //!   downloads\      installers while they are checked and run; each is deleted afterwards
 //! and, beside the program itself, the IT policy file policy.json (docs/policy.md), which the hub only reads.
 //!
@@ -19,6 +20,11 @@ pub fn data_dir() -> PathBuf {
 
 pub fn catalog_dir() -> PathBuf {
     data_dir().join("catalog")
+}
+
+/// The apps' icons from the catalog, each named by its SHA-256.
+pub fn icons_dir() -> PathBuf {
+    data_dir().join("icons")
 }
 
 pub fn downloads_dir() -> PathBuf {

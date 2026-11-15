@@ -66,7 +66,15 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text 
   return e;
 }
 
-function mark(letters: string, color?: string): HTMLElement {
+/** The app's own icon when the hub has it, otherwise the round mark. Either is decorative: the name is always text beside it. */
+function mark(letters: string, color?: string, icon?: string | null): HTMLElement {
+  if (icon && icon.startsWith("data:image/png;base64,")) {
+    const img = el("img", "app-icon");
+    img.src = icon;
+    img.alt = "";
+    img.setAttribute("aria-hidden", "true");
+    return img;
+  }
   const m = el("span", color ? "mark" : "mark web", letters);
   m.setAttribute("aria-hidden", "true");
   if (color) m.style.setProperty("--mark", color);
@@ -186,7 +194,7 @@ export function appRow(a: AppView, s: RowState, act: RowActions, keep?: HTMLElem
   const actions = el("div", "row-actions");
   if (main.textContent) actions.append(main);
   actions.append(...moreMenu(a, s, act));
-  row.append(mark(a.letters, a.color), info, actions);
+  row.append(mark(a.letters, a.color, a.icon), info, actions);
   return row;
 }
 
@@ -256,12 +264,12 @@ export function webRow(w: { id: string; name: string; description: string }, lau
   return row;
 }
 
-export function comingRow(c: { id: string; name: string; description: string; mark?: { letters: string; color: string } | null }): HTMLElement {
+export function comingRow(c: { id: string; name: string; description: string; mark?: { letters: string; color: string } | null; icon?: string | null }): HTMLElement {
   const row = el("li", "row");
   const info = el("div", "info");
   info.append(el("span", "name", c.name));
   if (c.description) info.append(el("span", "detail", c.description));
-  const m = c.mark ? mark(c.mark.letters, c.mark.color) : mark(c.name.replace(/[^A-Za-z]/g, "").slice(0, 2).toLowerCase());
+  const m = c.mark ? mark(c.mark.letters, c.mark.color, c.icon) : mark(c.name.replace(/[^A-Za-z]/g, "").slice(0, 2).toLowerCase(), undefined, c.icon);
   row.append(m, info);
   return row;
 }
