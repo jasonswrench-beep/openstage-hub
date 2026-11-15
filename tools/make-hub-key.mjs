@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Makes the hub key: a new Ed25519 key pair, separate from the apps' update keys, that signs the catalog and the hub's own updates.
-//   - The private half is saved with your password, OUTSIDE the repository (by default in "OpenStage Hub key" in your user folder; set
-//     OPENSTAGE_HUB_KEY to put it somewhere else). It never goes on GitHub. Keep a backup copy somewhere safe, with the password.
+//   - The private half is saved with your password, OUTSIDE the repository (by default in "<product name> key" in your user folder, for example
+//     "OpenStage Hub key"; set HUB_KEY to put it somewhere else). It never goes on GitHub. Keep a backup copy somewhere safe, with the password.
 //   - The public half is written into brand/brand.json (catalogPublicKey), so it is built into every hub from now on.
 // It refuses to replace a key that already exists: a new key would mean every hub already installed stops trusting the catalog.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -12,7 +12,11 @@ import { makeKey, publicOf } from "./catalog-lib.mjs";
 import { askSecret } from "./prompt.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-export const keyFile = () => process.env.OPENSTAGE_HUB_KEY || join(homedir(), "OpenStage Hub key", "openstage-hub-catalog-key.pem");
+const readBrand = () => JSON.parse(readFileSync(join(root, "brand", "brand.json"), "utf8"));
+export const keyFile = () => {
+  const b = readBrand();
+  return process.env.HUB_KEY || join(homedir(), `${b.productName} key`, `${b.programName}-catalog-key.pem`);
+};
 
 /** --check: asks for the password and says whether it opens the key and whether that key is the one in brand.json. Changes nothing. */
 async function check(file, brand) {
@@ -45,7 +49,7 @@ async function main() {
   if (brand.catalogPublicKey) {
     console.log("brand/brand.json already names a hub key, but its private half is not at");
     console.log(`  ${file}`);
-    console.log("If you have it elsewhere, set OPENSTAGE_HUB_KEY to its file. Nothing was changed.");
+    console.log("If you have it elsewhere, set HUB_KEY to its file. Nothing was changed.");
     process.exitCode = 1;
     return;
   }
@@ -68,7 +72,7 @@ async function main() {
   writeFileSync(file, privatePem, { mode: 0o600 });
   writeFileSync(
     join(dirname(file), "README.txt"),
-    "This folder holds the private half of the OpenStage Hub catalog key, protected by your password.\r\n" +
+    `This folder holds the private half of the ${brand.productName} catalog key, protected by your password.\r\n` +
       "Keep a backup copy of this folder somewhere safe (not on GitHub). Without it and its password, a new catalog cannot be published\r\n" +
       "for the hubs already installed, and they would need a new hub release with a new key.\r\n",
   );

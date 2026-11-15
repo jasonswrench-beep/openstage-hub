@@ -51,7 +51,7 @@ export function folderFlags(home = homedir(), env = process.env, repo = root) {
     [home, "/home"],
     [env.CARGO_HOME || join(home, ".cargo"), "/cargo"],
     [env.RUSTUP_HOME || join(home, ".rustup"), "/rustup"],
-    [repo, "/openstage-hub"],
+    [repo, "/hub"],
   ];
   return [...folders.map(([folder, name]) => `--remap-path-prefix=${folder}=${name}`), "-Clink-arg=/PDBALTPATH:%_PDB%"];
 }
@@ -103,7 +103,7 @@ function checkSignatures(files, publisher) {
 
 function checkSetup(setup, sign) {
   if (!existsSync(sevenZip)) fail(`7-Zip is not at ${sevenZip} (set OPENSTAGE_7ZIP), so the programs inside the setup could not be checked.`);
-  const work = mkdtempSync(join(tmpdir(), "openstage-hub-setup-check-"));
+  const work = mkdtempSync(join(tmpdir(), "hub-setup-check-"));
   try {
     const unpacked = spawnSync(sevenZip, ["x", "-y", `-o${work}`, setup], { encoding: "utf8" });
     if (unpacked.status !== 0) fail(`7-Zip could not unpack the setup: ${(unpacked.stdout + unpacked.stderr).slice(-400)}`);

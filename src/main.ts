@@ -83,7 +83,7 @@ function emptyText(v: View): string {
   if (v.keyMissing) return "This copy of the hub was built without its catalog key, so it cannot list the apps yet.";
   if (v.fetch.kind === "notYet") return "Fetching the list of apps.";
   if (v.fetch.kind === "off") return "Update checks are turned off on this computer, and no list of apps has been fetched yet.";
-  if (v.fetch.kind === "offline") return "Offline. Connect to the internet once to see the OpenStage apps.";
+  if (v.fetch.kind === "offline") return `Offline. Connect to the internet once to see the ${brand.shortName} apps.`;
   if (v.fetch.kind === "refused") return v.fetch.message;
   return "No apps are listed.";
 }

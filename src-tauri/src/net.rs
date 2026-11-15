@@ -12,7 +12,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub const ALLOWED_HOSTS: [&str; 4] =
     ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com", "github-releases.githubusercontent.com"];
 #[cfg_attr(not(windows), allow(dead_code))]
-const USER_AGENT: &str = "OpenStage-Hub";
+/// The hub's name and nothing else (no version, no computer details): "Prism-Hub" or "OpenStage-Hub".
+fn user_agent() -> String {
+    crate::brand::brand().product_name.replace(' ', "-")
+}
 #[cfg_attr(not(windows), allow(dead_code))]
 const MOST_REDIRECTS: usize = 5;
 
@@ -36,6 +39,11 @@ impl NetError {
     pub fn words(&self, what: &str) -> String {
         match self {
             NetError::Offline => "GitHub could not be reached. Check the internet connection and try again.".into(),
+            // The catalog's own address is built into the hub, so a 404 there means it is not published yet, or the hub's repository
+            // is private (GitHub answers 404 to anyone not signed in).
+            NetError::Status(404) if what == "catalog" => {
+                "GitHub does not have the list of apps yet (404). Its repository may still be private, or the list not published.".into()
+            }
             NetError::Status(404) => format!("GitHub does not have the {what} at the address in the catalog (404)."),
             NetError::Status(code) => format!("GitHub answered with an error ({code}) for the {what}. Try again later."),
             NetError::Refused(host) => format!("The {what} would have come from {host}, which is not GitHub, so nothing was downloaded."),
@@ -129,7 +137,7 @@ fn fetch(
 
 #[cfg(windows)]
 mod winhttp {
-    use super::{NetError, USER_AGENT};
+    use super::{user_agent, NetError};
     use std::ffi::c_void;
     use std::sync::atomic::{AtomicBool, Ordering};
     use windows::core::{HSTRING, PCWSTR};
@@ -201,7 +209,7 @@ mod winhttp {
         sink: &mut dyn FnMut(&[u8]) -> Result<(), NetError>,
         progress: &mut dyn FnMut(u64, u64),
     ) -> Result<Outcome, NetError> {
-        let agent = HSTRING::from(USER_AGENT);
+        let agent = HSTRING::from(user_agent());
         let host_w = HSTRING::from(host);
         let path_w = HSTRING::from(path);
         let verb = HSTRING::from("GET");

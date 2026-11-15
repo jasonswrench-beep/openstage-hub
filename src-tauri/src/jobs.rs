@@ -103,7 +103,7 @@ fn run_and_wait(program: &Path, args: &[String]) -> Result<i32, String> {
         Ok(status) => Ok(status.code().unwrap_or(-1)),
         // ERROR_ELEVATION_REQUIRED
         Err(e) if e.raw_os_error() == Some(740) => {
-            Err("The installer asked for administrator rights. OpenStage apps install for one person and never need them, so it was not run.".into())
+            Err(format!("The installer asked for administrator rights. {} apps install for one person and never need them, so it was not run.", crate::brand::brand().short_name))
         }
         Err(_) => Err("Windows could not start the installer.".into()),
     }

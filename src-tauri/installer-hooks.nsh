@@ -1,7 +1,7 @@
 ; Added to the hub's installer (tauri.conf.json, bundle.windows.nsis.installerHooks).
 ;
 ; Uninstalling the hub removes the hub, its start-up entry, its cached catalog and its download folder (all under
-; %LOCALAPPDATA%\<the hub's identifier>). It never touches the OpenStage apps: they stay in Windows' installed apps list
+; %LOCALAPPDATA%\<the hub's identifier>). It never touches the suite's apps: they stay in Windows' installed apps list
 ; and keep working.
 
 !macro NSIS_HOOK_POSTUNINSTALL

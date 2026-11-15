@@ -284,10 +284,10 @@ pub fn app_view(app: &App, installed: &[Installed], saved: &Saved, previews_allo
     }
 }
 
-/// The public half of the hub key. A development build can be given a test key in OPENSTAGE_HUB_TEST_KEY; a release build cannot.
+/// The public half of the hub key. A development build can be given a test key in HUB_TEST_KEY; a release build cannot.
 pub fn public_key() -> String {
     #[cfg(debug_assertions)]
-    if let Ok(k) = std::env::var("OPENSTAGE_HUB_TEST_KEY") {
+    if let Ok(k) = std::env::var("HUB_TEST_KEY") {
         return k;
     }
     brand().catalog_public_key.clone()
@@ -314,10 +314,10 @@ fn keep(bytes: &[u8], sig: &[u8]) -> Result<(), String> {
     state::write_atomic(&dir.join(&b.catalog.signature), sig)
 }
 
-/// A development build can read the catalog from a folder instead of GitHub (OPENSTAGE_HUB_CATALOG_DIR), to try a catalog before it is published.
+/// A development build can read the catalog from a folder instead of GitHub (HUB_CATALOG_DIR), to try a catalog before it is published.
 fn local_catalog_dir() -> Option<PathBuf> {
     #[cfg(debug_assertions)]
-    if let Some(d) = std::env::var_os("OPENSTAGE_HUB_CATALOG_DIR") {
+    if let Some(d) = std::env::var_os("HUB_CATALOG_DIR") {
         return Some(PathBuf::from(d));
     }
     None

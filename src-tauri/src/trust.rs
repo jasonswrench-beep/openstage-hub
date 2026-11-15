@@ -130,15 +130,15 @@ mod tests {
         assert!(signature(&path).is_err());
         assert!(check_signed_by(&path, "Jason Wrench").is_err());
         let _ = std::fs::remove_file(&path);
-        // A program Windows itself ships is catalog-signed rather than signed inside the file, so it is not a fair test; the OpenStage apps'
+        // A program Windows itself ships is catalog-signed rather than signed inside the file, so it is not a fair test; the suite's apps'
         // own installers are tried in TESTING-TODO.md and in the ignored test below.
     }
 
-    /// Needs an installed, signed OpenStage app: cargo test -- --ignored. Set HUB_SIGNED_FILE to a signed program to try another.
+    /// Needs a signed program from the expected signer: cargo test -- --ignored. Set HUB_SIGNED_FILE to a signed program to try another.
     #[cfg(windows)]
     #[test]
-    #[ignore = "needs a signed OpenStage program on this computer"]
-    fn a_signed_openstage_program_names_its_signer_and_is_timestamped() {
+    #[ignore = "needs a signed program from the expected signer on this computer"]
+    fn a_signed_suite_program_names_its_signer_and_is_timestamped() {
         let file = std::env::var("HUB_SIGNED_FILE").unwrap_or_else(|_| {
             format!("{}\\OpenExplainer\\openexplainer.exe", std::env::var("LOCALAPPDATA").unwrap())
         });

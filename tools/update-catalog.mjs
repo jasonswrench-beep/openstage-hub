@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Update OpenStage Catalog.bat runs this. It:
+// Update <short name> Catalog.bat (Update OpenStage Catalog.bat here) runs this. It:
 //   1. reads each repository's newest stable and preview releases on GitHub (drafts never count) and finds each setup file;
 //   2. downloads each setup file it has not checked before, computes its SHA-256 and checks its code signature (valid, timestamped, signed by
 //      the expected signer); it STOPS if any setup file is missing or unsigned;
@@ -212,7 +212,7 @@ async function main(argv) {
   }
 
   const file = keyFile();
-  if (!existsSync(file)) stop(`the hub key's private half is not at ${file}. Set OPENSTAGE_HUB_KEY to where it is.`);
+  if (!existsSync(file)) stop(`the hub key's private half is not at ${file}. Set HUB_KEY to where it is.`);
   const pem = readFileSync(file, "utf8");
   const password = await askSecret("The hub key's password: ");
   if (!password) stop("no password was typed. Nothing was signed.");
@@ -231,7 +231,7 @@ async function main(argv) {
   writeFileSync(signatureFile, signature);
   say(`Signed: catalog/out/${brand.catalog.file} and its signature.`);
   if (local) {
-    say("--local: not uploaded. A development hub reads this folder when OPENSTAGE_HUB_CATALOG_DIR names it.");
+    say("--local: not uploaded. A development hub reads this folder when HUB_CATALOG_DIR names it.");
     return;
   }
 
@@ -240,7 +240,7 @@ async function main(argv) {
     say(`Making the release "${brand.catalog.tag}" in ${brand.repository}.`);
     gh(
       ["release", "create", brand.catalog.tag, "--repo", brand.repository, "--prerelease", "--title", `${brand.shortName} catalog`, "--notes",
-        `The signed list of ${brand.shortName} apps that ${brand.productName} reads. Updated by Update OpenStage Catalog.bat; not a program release.`],
+        `The signed list of ${brand.shortName} apps that ${brand.productName} reads. Updated by Update ${brand.shortName} Catalog.bat; not a program release.`],
       { json: false },
     );
   }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! OpenStage Hub: lists every app in the suite and installs, updates and opens each one from its signed GitHub release.
+//! The hub (OpenStage Hub or Prism Hub, by brand/brand.json): lists every app in the suite and installs, updates and opens each one from its signed GitHub release.
 
 pub mod brand;
 pub mod catalog;
@@ -49,7 +49,7 @@ pub fn show_window(app: &tauri::AppHandle) {
 
 pub fn run() {
     let in_tray = std::env::args().any(|a| a == "--tray");
-    // A development copy can print what the window would show (after fetching the catalog) and stop: openstage-hub --print-view
+    // A development copy can print what the window would show (after fetching the catalog) and stop: <program> --print-view
     #[cfg(debug_assertions)]
     if std::env::args().any(|a| a == "--print-view") {
         let hub = Hub::new(false);
@@ -57,7 +57,7 @@ pub fn run() {
         println!("{}", serde_json::to_string_pretty(&hub.view()).unwrap_or_default());
         return;
     }
-    // A development copy can run the six install steps for one app, printing each stage: openstage-hub --install <app id>
+    // A development copy can run the six install steps for one app, printing each stage: <program> --install <app id>
     #[cfg(debug_assertions)]
     if let Some(id) = std::env::args().skip_while(|a| a != "--install").nth(1) {
         let hub = Hub::new(false);

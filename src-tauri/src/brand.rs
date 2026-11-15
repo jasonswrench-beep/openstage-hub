@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The brand: every value that makes this program OpenStage Hub rather than Prism Hub, read from brand/brand.json when the program is built.
+//! The brand: every value that makes this program one hub rather than the other (OpenStage Hub or Prism Hub), read from brand/brand.json when the program is built.
 //! Nothing brand-specific is written anywhere else in the Rust code.
 
 use serde::Deserialize;
