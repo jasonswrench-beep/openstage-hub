@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The hub (OpenStage Hub or Prism Hub, by brand/brand.json): lists every app in the suite and installs, updates and opens each one from its signed GitHub release.
+//! The hub (OpenStage Hub or Prism Hub, by its brand folder in brands/): lists every app in the suite and installs, updates and opens each one from its signed GitHub release.
 
 pub mod brand;
 pub mod catalog;

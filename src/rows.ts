@@ -66,10 +66,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text 
   return e;
 }
 
-/** The app's own icon when the hub has it, otherwise the round mark. Either is decorative: the name is always text beside it. */
+/** The app's own icon when the catalog carries one, otherwise the round mark: letters on the app's colour. Decorative either way: the name is
+ *  always text beside it. The icon is an image from the signed catalog (a data: address), so it runs nothing and loads nothing. */
 function mark(letters: string, color?: string, icon?: string | null): HTMLElement {
-  if (icon && icon.startsWith("data:image/png;base64,")) {
-    const img = el("img", "app-icon");
+  if (icon && /^data:image\/(svg\+xml|png);base64,/.test(icon)) {
+    const img = el("img", "mark icon");
     img.src = icon;
     img.alt = "";
     img.setAttribute("aria-hidden", "true");
@@ -264,12 +265,12 @@ export function webRow(w: { id: string; name: string; description: string }, lau
   return row;
 }
 
-export function comingRow(c: { id: string; name: string; description: string; mark?: { letters: string; color: string } | null; icon?: string | null }): HTMLElement {
+export function comingRow(c: { id: string; name: string; description: string; mark?: { letters: string; color: string; icon?: string | null } | null }): HTMLElement {
   const row = el("li", "row");
   const info = el("div", "info");
   info.append(el("span", "name", c.name));
   if (c.description) info.append(el("span", "detail", c.description));
-  const m = c.mark ? mark(c.mark.letters, c.mark.color, c.icon) : mark(c.name.replace(/[^A-Za-z]/g, "").slice(0, 2).toLowerCase(), undefined, c.icon);
+  const m = c.mark ? mark(c.mark.letters, c.mark.color, c.mark.icon) : mark(c.name.replace(/[^A-Za-z]/g, "").slice(0, 2).toLowerCase());
   row.append(m, info);
   return row;
 }

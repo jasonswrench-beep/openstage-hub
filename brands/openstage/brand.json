@@ -1,12 +1,12 @@
 {
-  "_about": "Every value that makes this program OpenStage Hub rather than Prism Hub. Nothing brand-specific lives anywhere else. After changing it, run tools/apply-brand.mjs (Build OpenStage Hub.bat does) so the program's settings and icons follow.",
+  "_about": "Every value that makes this program OpenStage Hub rather than the other hub. Nothing brand-specific lives anywhere else: this folder also holds the icon named here, the program icons made from it (app-icons, by tools/make-icons.mjs), the list of apps (apps.json) and their icons. Every script takes the brand as --brand openstage (the .bat files pass it).",
   "productName": "OpenStage Hub",
   "shortName": "OpenStage",
   "identifier": "org.openstage.hub",
   "programName": "openstage-hub",
   "startMenuFolder": "OpenStage",
   "publisher": "Jason Wrench",
-  "icon": "brand/OpenStage-Suite.svg",
+  "icon": "OpenStage-Suite.svg",
   "colors": {
     "brand": "#B18FFC",
     "navy": "#102037",

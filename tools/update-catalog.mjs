@@ -1,35 +1,45 @@
 // SPDX-License-Identifier: Apache-2.0
-// Update <short name> Catalog.bat (Update OpenStage Catalog.bat here) runs this. It:
+// Update <short name> Catalog.bat (Update OpenStage Catalog.bat, Update Prism Catalog.bat) runs this for its brand. It:
 //   1. reads each repository's newest stable and preview releases on GitHub (drafts never count) and finds each setup file;
 //   2. downloads each setup file it has not checked before, computes its SHA-256 and checks its code signature (valid, timestamped, signed by
 //      the expected signer); it STOPS if any setup file is missing or unsigned;
-//   3. writes the catalog, prints a short table of what changed, asks for the hub key's password and signs it;
-//   4. checks the signature with the public key built into the hub (brand/brand.json), and uploads the catalog and its signature to the
+//   3. writes the catalog, with each app's icon inside it as a picture, prints a short table of what changed, asks for the hub key's password
+//      and signs it;
+//   4. checks the signature with the public key built into the hub (the brand's brand.json), and uploads the catalog and its signature to the
 //      release named "catalog" in the hub's repository.
 // Until it runs after an app release, the hub keeps offering the previous version, which is safe.
 //
-//   node tools/update-catalog.mjs            all of the above
-//   node tools/update-catalog.mjs --local    sign, but do not upload: the files are left in catalog/out (to try with a development hub)
-//   node tools/update-catalog.mjs --dry-run  find and check everything and show the table; sign and upload nothing
+//   node tools/update-catalog.mjs --brand <folder>            all of the above
+//   node tools/update-catalog.mjs --brand <folder> --local    sign, but do not upload: the files are left in brands/<folder>/out (to try
+//                                                              with a development hub)
+//   node tools/update-catalog.mjs --brand <folder> --dry-run  find and check everything and show the table; sign and upload nothing
 //
 // It uses the GitHub command line (gh), signed in as the owner, for reading releases and uploading. Checked setup files are remembered in
-// catalog/work/checked.json by GitHub's own SHA-256 of each file, so a setup file is downloaded once, not on every run.
+// brands/<folder>/work/checked.json by GitHub's own SHA-256 of each file, so a setup file is downloaded once, not on every run.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { appEntry, changes, checkSignature, downloadUrl, findAsset, pickReleases, publicOf, releaseEntry, signBytes, stamp, table } from "./catalog-lib.mjs";
+import { appEntry, changes, checkSignature, downloadUrl, findAsset, markOf, pickReleases, previewMismatch, publicOf, releaseEntry, signBytes, stamp, table } from "./catalog-lib.mjs";
 import { keyFile } from "./make-hub-key.mjs";
 import { askSecret } from "./prompt.mjs";
+import { loadBrand, root } from "./brand.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const work = join(root, "catalog", "work");
-const out = join(root, "catalog", "out");
-const brand = JSON.parse(readFileSync(join(root, "brand", "brand.json"), "utf8"));
-const sources = JSON.parse(readFileSync(join(root, "catalog", "apps.json"), "utf8"));
+let chosen;
+try {
+  chosen = loadBrand();
+} catch (e) {
+  console.error(`STOPPED: ${e.message}`);
+  process.exit(1);
+}
+const { brand, apps: sources, dir: brandDir } = chosen;
+const work = join(brandDir, "work");
+const out = join(brandDir, "out");
+/** A file's place in the repository, for messages. */
+const shown = (file) => relative(root, file).replaceAll("\\", "/");
 const checkedFile = join(work, "checked.json");
 /** Every setup file that is missing or not properly signed. All are listed together, and then the script stops before signing anything. */
 const problems = [];
@@ -96,7 +106,7 @@ async function checked(asset, url, expectedSigner, what, memory) {
       : sig.signer.toLowerCase() !== expectedSigner.toLowerCase() ? `is signed by ${sig.signer}, not ${expectedSigner}`
       : null;
     if (problem) {
-      problems.push(`${what}: ${asset.name} ${problem}. If this release came before signing began, add its tag to "ignoreTags" in catalog/apps.json.`);
+      problems.push(`${what}: ${asset.name} ${problem}. If this release came before signing began, add its tag to "ignoreTags" in ${shown(chosen.appsFile)}.`);
       return null;
     }
     memory[sum] = { name: asset.name, size: asset.size, signer: expectedSigner, checked: stamp() };
@@ -107,40 +117,39 @@ async function checked(asset, url, expectedSigner, what, memory) {
   }
 }
 
-/** Icons to upload beside the catalog: published name and source file. */
-const icons = [];
+/** An app's mark with its icon file (if apps.json names one, in the brand's folder) read into it. */
+const markFor = (mark) => markOf(mark, (path) => readFileSync(join(brandDir, path)));
 
-/** An app's icon (catalog/<icon>), published beside the catalog as icon-<id>.png, with its SHA-256. */
-function iconEntry(source) {
-  if (!source.icon) return null;
-  const file = join(root, "catalog", source.icon);
-  if (!existsSync(file)) {
-    problems.push(`${source.name}: its icon ${source.icon} is not in catalog/.`);
-    return null;
-  }
-  const bytes = readFileSync(file);
-  if (!bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) || bytes.length > 256 * 1024) {
-    problems.push(`${source.name}: its icon must be a PNG of at most 256 KB.`);
-    return null;
-  }
-  const name = `icon-${source.id}.png`;
-  icons.push({ name, file });
-  return { url: downloadUrl(brand.repository, brand.catalog.tag, name), sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length };
+/** Whether a repository exists (private counts). Only "not found" means no; any other trouble stops the script. */
+function repositoryExists(repository) {
+  const done = spawnSync("gh", ["api", `repos/${repository}`, "--silent"], { encoding: "utf8" });
+  if (done.status === 0) return true;
+  if (/404|Not Found/i.test(done.stderr || done.stdout)) return false;
+  stop(`gh could not look up ${repository}: ${(done.stderr || done.stdout).trim().slice(0, 300)}`);
 }
 
 async function buildCatalog(memory) {
   const apps = [];
-  const comingSoon = [...sources.comingSoon];
+  const comingSoon = sources.comingSoon.map((c) => (c.mark ? { ...c, mark: markFor(c.mark) } : c));
   for (const source of sources.apps) {
     say(`${source.name} (${source.repository})`);
+    // A planned app is left out altogether until its repository has been made.
+    if (source.hiddenUntilRepositoryExists && !repositoryExists(source.repository)) {
+      say("  (left out until its repository exists)");
+      continue;
+    }
     const ignored = new Set(source.ignoreTags ?? []);
     const { stable, preview } = pickReleases(releasesOf(source.repository).filter((r) => !ignored.has(r.tag_name)));
+    for (const r of [stable, preview]) {
+      const note = previewMismatch(r);
+      if (note) say(`  NOTE: ${note}`);
+    }
     // An app still being made is listed under Coming soon until people can actually download it: a public repository with a release.
     if (source.comingSoonUntilReleased) {
       const visibility = gh(["repo", "view", source.repository, "--json", "visibility"]).visibility;
       if ((!stable && !preview) || visibility !== "PUBLIC") {
         say(`  Coming soon (${visibility !== "PUBLIC" ? `its repository is ${visibility.toLowerCase()}` : "no published release yet"})`);
-        comingSoon.push({ id: source.id, name: source.name, description: source.description ?? "", mark: source.mark, icon: iconEntry(source) });
+        comingSoon.push({ id: source.id, name: source.name, description: source.description ?? "", mark: markFor(source.mark) });
         continue;
       }
     }
@@ -170,9 +179,7 @@ async function buildCatalog(memory) {
       extras.push({ name: x.name, description: x.description ?? "", fileName: asset.name, url: downloadUrl(source.repository, release.tag_name, asset.name), sha256: sha256(file), size: asset.size });
       rmSync(file, { force: true });
     }
-    const built = appEntry(source, stableEntry, previewEntry, extras);
-    built.icon = iconEntry(source);
-    apps.push(built);
+    apps.push(appEntry({ ...source, mark: markFor(source.mark) }, stableEntry, previewEntry, extras));
   }
 
   // The hub's own newest release (its catalog release is not a version, so it never counts).
@@ -226,7 +233,7 @@ async function main(argv) {
   mkdirSync(out, { recursive: true });
   if (dry) {
     writeFileSync(join(out, `${brand.catalog.file}.unsigned`), bytes);
-    say(`Dry run: nothing was signed or uploaded. The catalog it would publish is in catalog/out/${brand.catalog.file}.unsigned`);
+    say(`Dry run: nothing was signed or uploaded. The catalog it would publish is in ${shown(join(out, brand.catalog.file))}.unsigned`);
     return;
   }
   if (before && !rows.some((r) => r.changed)) {
@@ -234,30 +241,25 @@ async function main(argv) {
     return;
   }
 
-  const file = keyFile();
+  const file = keyFile(chosen.id);
   if (!existsSync(file)) stop(`the hub key's private half is not at ${file}. Set HUB_KEY to where it is.`);
   const pem = readFileSync(file, "utf8");
   const password = await askSecret("The hub key's password: ");
   if (!password) stop("no password was typed. Nothing was signed.");
   let signature;
   try {
-    if (publicOf(pem, password) !== brand.catalogPublicKey) stop("this key is not the one built into the hub (brand/brand.json). Nothing was signed.");
+    if (publicOf(pem, password) !== brand.catalogPublicKey) stop(`this key is not the one built into the hub (${shown(chosen.brandFile)}). Nothing was signed.`);
     signature = signBytes(bytes, pem, password) + "\n";
   } catch (e) {
     if (e instanceof Stop) throw e;
-    stop(`the password did not open the hub key (${password.length} characters were typed). Nothing was signed. To try the password on its own: node tools\\make-hub-key.mjs --check`);
+    stop(`the password did not open the hub key (${password.length} characters were typed). Nothing was signed. To try the password on its own: node tools\\make-hub-key.mjs --brand ${chosen.id} --check`);
   }
   if (!checkSignature(bytes, signature, brand.catalogPublicKey)) stop("the new signature did not check out. Nothing was uploaded.");
   const catalogFile = join(out, brand.catalog.file);
   const signatureFile = join(out, brand.catalog.signature);
   writeFileSync(catalogFile, bytes);
   writeFileSync(signatureFile, signature);
-  const iconFiles = icons.map((i) => {
-    const target = join(out, i.name);
-    copyFileSync(i.file, target);
-    return target;
-  });
-  say(`Signed: catalog/out/${brand.catalog.file} and its signature.`);
+  say(`Signed: ${shown(catalogFile)} and its signature.`);
   if (local) {
     say("--local: not uploaded. A development hub reads this folder when HUB_CATALOG_DIR names it.");
     return;
@@ -273,8 +275,6 @@ async function main(argv) {
     );
   }
   // Both in one upload. A hub that fetches between the two files sees a mismatch and keeps its last good catalog until its next check.
-  // The icons first: a hub that reads the new catalog then finds every icon it names.
-  if (iconFiles.length) gh(["release", "upload", brand.catalog.tag, ...iconFiles, "--repo", brand.repository, "--clobber"], { json: false });
   gh(["release", "upload", brand.catalog.tag, signatureFile, catalogFile, "--repo", brand.repository, "--clobber"], { json: false });
   say(`Published to https://github.com/${brand.repository}/releases/tag/${brand.catalog.tag}`);
 }

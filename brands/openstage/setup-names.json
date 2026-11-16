@@ -1,0 +1,16 @@
+{
+  "_about": "For tests/catalog-lib.test.mjs only: setup file names each app's releases have used (as GitHub showed them on 2026-11-15), which its setupPattern in apps.json must match, and files that must not match. An app not released yet has the names its installer would get from Tauri (GitHub turns a space into a dot) or from a release script.",
+  "setups": {
+    "openstage-author": ["OpenStage-Author-0.1.0-alpha.5-Setup.exe", "OpenStage-Author_0.1.0_x64-setup.exe"],
+    "openstage-recorder": ["OpenStage-Recorder-0.1.0-alpha.4-Setup.exe", "OpenStage.Recorder_0.1.0_x64-setup.exe"],
+    "openassess": ["OpenAssess_0.1.0_x64-setup.exe"],
+    "openexplainer": ["OpenExplainer-0.2.0-alpha.4-Setup.exe", "OpenExplainer_0.2.0_x64-setup.exe"],
+    "openstage-capture-express": ["OpenStage-Capture-Express-0.1.0-x64-setup.exe"],
+    "openstage-guide": ["OpenStage-Guide-0.1.0-alpha.7-Setup.exe"],
+    "pdf-remediator": ["PDF-Remediator-Setup.exe"],
+    "openstage-studio": ["OpenStage.Studio_0.1.0_x64-setup.exe", "OpenStage-Studio-0.1.0-alpha.1-Setup.exe"],
+    "openstage-package-doctor": ["OpenStage.Package.Doctor_0.1.0_x64-setup.exe", "OpenStage-Package-Doctor-0.1.0-alpha.1-Setup.exe"],
+    "openstage-rehearse": ["OpenStage.Rehearse_0.1.0_x64-setup.exe", "OpenStage-Rehearse-0.1.0-alpha.1-Setup.exe"]
+  },
+  "notSetups": ["OpenStage-Recorder-0.1.0-alpha.4-portable.zip"]
+}

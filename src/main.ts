@@ -2,7 +2,7 @@
 // The hub's window. It shows what the Rust side reports (the view) and asks it to act; it never reaches the network or the disk itself.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import brand from "../brand/brand.json";
+import { brand, markUrl } from "virtual:brand";
 import type { AppView, JobEvent, View } from "./types";
 import { appRow, comingRow, statusLine, webRow, type RowState } from "./rows";
 import { bindMenuButton, closeAllMenus } from "./menus";
@@ -20,6 +20,7 @@ let notice: string | null = null;
 // ---- Brand ------------------------------------------------------------------------------------------------------------------------------
 
 document.title = brand.productName;
+document.querySelector<HTMLImageElement>("img.logo")!.src = markUrl;
 $("product-name").textContent = brand.productName;
 $("sibling").textContent = brand.sibling.label;
 document.documentElement.style.setProperty("--accent-light", brand.colors.accentLight);

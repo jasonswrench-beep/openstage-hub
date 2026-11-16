@@ -35,6 +35,19 @@ export function pickReleases(list) {
   return { stable, preview };
 }
 
+/**
+ * A note when GitHub's pre-release mark and the version disagree: the hub decides by the version alone (a pre-release part means a
+ * preview), so a release marked pre-release on GitHub with a plain version would be offered as stable. Null when they agree.
+ */
+export function previewMismatch(release) {
+  if (!release || !versionKey(release.tag_name)) return null;
+  const byVersion = isPreview(release.tag_name);
+  if (Boolean(release.prerelease) === byVersion) return null;
+  return byVersion
+    ? `${release.tag_name} has a pre-release version but is not marked pre-release on GitHub; the hub shows it as a preview.`
+    : `${release.tag_name} is marked pre-release on GitHub but its version has no pre-release part; the hub shows it as stable.`;
+}
+
 /** The one asset whose name matches `pattern`, or an error in words. */
 export function findAsset(release, pattern, what) {
   const re = new RegExp(pattern);
@@ -61,12 +74,32 @@ export function releaseEntry(repository, release, asset, sha256, windowsVersion)
   };
 }
 
+/** The most one app's icon may be (the hub refuses larger: src-tauri/src/catalog.rs, MOST_ICON_BYTES). */
+export const MOST_ICON_BYTES = 32 * 1024;
+
+/**
+ * An app's mark for the catalog. When the brand's apps.json names an icon file (mark.icon, an .svg or .png in the brand's folder), the picture
+ * is put into the signed catalog as a data: address, so the hub never downloads it separately and has it offline. readFile(path) returns its
+ * bytes.
+ */
+export function markOf(mark, readFile) {
+  const out = { letters: mark.letters, color: mark.color };
+  if (!mark.icon) return out;
+  const kind = /\.svg$/i.test(mark.icon) ? "image/svg+xml" : /\.png$/i.test(mark.icon) ? "image/png" : null;
+  if (!kind) throw new Error(`the icon ${mark.icon} is not an .svg or .png file`);
+  const bytes = readFile(mark.icon);
+  if (bytes.length === 0 || bytes.length > MOST_ICON_BYTES) throw new Error(`the icon ${mark.icon} is ${bytes.length} bytes; it must be between 1 and ${MOST_ICON_BYTES}`);
+  if (kind === "image/png" && !bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) throw new Error(`the icon ${mark.icon} is not a PNG picture`);
+  if (kind === "image/svg+xml" && /<script|<foreignObject|\son[a-z]+\s*=/i.test(bytes.toString("utf8"))) throw new Error(`the icon ${mark.icon} holds a script; use a plain picture`);
+  return { ...out, icon: `data:${kind};base64,${bytes.toString("base64")}` };
+}
+
 /** "2026-11-15T18:04:00Z": the date format the hub reads (twenty characters, no fractions of a second). */
 export function stamp(date = new Date()) {
   return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
-/** The catalog's apps entry, from the source facts in catalog/apps.json and the releases found. */
+/** The catalog's apps entry, from the source facts in the brand's apps.json and the releases found. */
 export function appEntry(source, stable, preview, extras) {
   const entry = {
     id: source.id,
@@ -105,14 +138,15 @@ export function changes(before, after) {
   }
   for (const gone of old.values()) rows.push({ name: `${gone.name}`, before: "listed", now: "removed", changed: true });
   rows.push({ name: "The hub itself", before: say(before?.hub), now: say(after.hub), changed: say(before?.hub) !== say(after.hub) || before?.hub?.sha256 !== after.hub?.sha256 });
+  // An app's icon or round mark changing is a change worth publishing too (OpenStage Hub 1.0.1's catalogs named icons as separate files).
+  const marks = (c) => JSON.stringify((c?.apps ?? []).map((a) => [a.id, a.mark]));
+  if (marks(before) !== marks(after)) {
+    const count = (c) => `${(c?.apps ?? []).filter((a) => a.mark?.icon).length} icons`;
+    rows.push({ name: "Icons and marks", before: count(before), now: count(after), changed: true });
+  }
   const webBefore = JSON.stringify(before?.web ?? []);
   const webAfter = JSON.stringify(after.web);
   if (webBefore !== webAfter) rows.push({ name: "Web links", before: `${(before?.web ?? []).length}`, now: `${after.web.length}`, changed: true });
-  const iconsOf = (c) => JSON.stringify([...(c?.apps ?? []), ...(c?.comingSoon ?? [])].map((a) => a.icon?.sha256 ?? null));
-  if (iconsOf(before) !== iconsOf(after)) {
-    const count = (c) => `${[...(c?.apps ?? []), ...(c?.comingSoon ?? [])].filter((a) => a.icon).length}`;
-    rows.push({ name: "Icons", before: count(before), now: count(after), changed: true });
-  }
   if (JSON.stringify(before?.comingSoon ?? []) !== JSON.stringify(after.comingSoon)) {
     rows.push({ name: "Coming soon", before: `${(before?.comingSoon ?? []).length}`, now: `${after.comingSoon.length}`, changed: true });
   }

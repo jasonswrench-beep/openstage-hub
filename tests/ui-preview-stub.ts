@@ -2,6 +2,7 @@
 // A stand-in for the Rust side, so the real window code (src/main.ts) runs in a browser for looking and accessibility testing.
 // It answers the same commands with made-up but realistic data, and pretends to download and install. It touches nothing on the computer.
 import type { AppView, JobEvent, View } from "../src/types";
+import { apps as brandApps } from "virtual:brand-apps";
 
 const callbacks = new Map<number, (data: unknown) => void>();
 const listeners = new Map<string, number[]>();
@@ -11,63 +12,61 @@ function emit(event: string, payload: unknown) {
   for (const id of listeners.get(event) ?? []) callbacks.get(id)?.({ event, id, payload });
 }
 
-const app = (id: string, name: string, letters: string, color: string, description: string, more: Partial<AppView>): AppView => ({
-  id, name, letters, color, description,
-  installed: null, offer: null, update: false, running: false, needsNewerHub: false, previewBlocked: false, extras: [],
-  ...more,
-});
+/** The states the rows are shown in, one per app in the brand's list, in this order (and round again for a longer list). */
+const states: Partial<AppView>[] = [
+  { installed: { version: "0.1.0-alpha.4", exact: true, folderKnown: true }, offer: { version: "0.1.0-alpha.5", preview: true, size: 75489000 }, update: true, running: true },
+  { installed: { version: "0.1.0-alpha.4", exact: true, folderKnown: true }, offer: { version: "0.1.0-alpha.4", preview: true, size: 5472304 } },
+  { offer: { version: "0.1.0-alpha.4", preview: true, size: 7013808 } },
+  { installed: { version: "0.1.0", exact: false, folderKnown: true }, offer: { version: "0.1.0-alpha.26", preview: true, size: 27122688 } },
+  { installed: { version: "0.2.0-alpha.3", exact: true, folderKnown: true }, offer: { version: "0.2.0-alpha.4", preview: true, size: 15247912 }, update: true },
+  { offer: { version: "0.1.0-alpha.7", preview: true, size: 29168344 } },
+  { offer: { version: "0.3.0-alpha.8", preview: true, size: 138865896 } },
+];
+/** The app whose pretend install fails its checksum, to show a problem: the second not installed (the first, with a short list). */
+const released = brandApps.apps.filter((a) => !a.comingSoonUntilReleased);
+const notInstalled = released.filter((_, i) => !states[i % states.length].installed);
+const failing = (notInstalled[1] ?? notInstalled[0])?.id;
 
 const view: View = {
-  hubVersion: "1.0.0",
-  catalogDate: "2026-11-15T16:48:55Z",
+  hubVersion: "1.0.2",
+  catalogDate: "2026-11-16T16:48:55Z",
   fetch: { kind: "fresh" },
   lastCheck: Math.floor(Date.now() / 1000) - 600,
   keyMissing: false,
   needsNewerHub: false,
   hubUpdate: null,
   justUpdated: null,
-  apps: [
-    app("openstage-author", "OpenStage Author", "au", "#5B3FC4", "The main authoring studio", {
-      installed: { version: "0.1.0-alpha.4", exact: true, folderKnown: true }, offer: { version: "0.1.0-alpha.5", preview: true, size: 75489000 }, update: true, running: true,
-    }),
-    app("openstage-recorder", "OpenStage Recorder", "re", "#B42318", "A light screen recorder with a simple editor", {
-      installed: { version: "0.1.0-alpha.4", exact: true, folderKnown: true }, offer: { version: "0.1.0-alpha.4", preview: true, size: 5472304 },
-      extras: [{ index: 0, name: "Portable copy", description: "Runs without installing", size: 5151595 }],
-    }),
-    app("openassess", "OpenAssess", "as", "#0F7B6C", "Turns test banks into LMS-ready quizzes", {
-      installed: { version: "0.1.0", exact: false, folderKnown: true }, offer: { version: "0.1.0-alpha.26", preview: true, size: 27122688 },
-    }),
-    app("openexplainer", "OpenExplainer", "ex", "#6B5BD2", "Still-image tutorials and how-to books", {
-      installed: { version: "0.2.0-alpha.3", exact: true, folderKnown: true }, offer: { version: "0.2.0-alpha.4", preview: true, size: 15247912 }, update: true,
-    }),
-    app("openstage-capture-express", "OpenStage Capture Express", "ce", "#B54708", "Step-by-step guide maker", {
-      offer: { version: "0.1.0-alpha.4", preview: true, size: 7013808 },
-    }),
-    app("openstage-guide", "OpenStage Guide", "gu", "#1D6FB8", "Facilitator guides and participant workbooks", {
-      offer: { version: "0.1.0-alpha.7", preview: true, size: 29168344 },
-    }),
-    app("pdf-remediator", "PDF Remediator", "pd", "#C11574", "Drafts accessibility repairs for PDFs", {
-      offer: { version: "0.3.0-alpha.7", preview: true, size: 138865896 },
-    }),
-  ],
-  web: [
-    { id: "openstage-website", name: "OpenStage website", description: "openstageauthor.com", url: "https://openstageauthor.com" },
-    { id: "roadmap", name: "Roadmap and feature requests", description: "See what is planned and ask for something", url: "https://example.org" },
-  ],
+  apps: released.map((a, i) => ({
+    id: a.id,
+    name: a.name,
+    letters: a.mark.letters,
+    color: a.mark.color,
+    // Every app shows the icon the real catalog would carry; an app without one (a planned app) shows its round mark.
+    icon: a.mark.icon ?? null,
+    description: a.description ?? "",
+    installed: null, offer: null, update: false, running: false, needsNewerHub: false, previewBlocked: false,
+    extras: (a.extras ?? []).map((x, index) => ({ index, name: x.name, description: x.description ?? "", size: 5151595 })),
+    ...states[i % states.length],
+  })),
+  // As in the real catalog, a link with no address yet is left out.
+  web: brandApps.web.filter((w) => w.url),
   comingSoon: [
-    { id: "openstage-studio", name: "OpenStage Studio", description: "Narrated, captioned tutorial videos from a script", mark: { letters: "st", color: "#0E6E8C" } },
+    ...brandApps.comingSoon,
+    // Planned apps (left out of the real catalog until their repositories exist) are shown here too, to see the section full.
+    ...brandApps.apps.filter((a) => a.comingSoonUntilReleased).map((a) => ({ id: a.id, name: a.name, description: a.description ?? "", mark: { letters: a.mark.letters, color: a.mark.color, icon: a.mark.icon ?? null } })),
   ],
-  updatesReady: 2,
+  updatesReady: 0,
   settings: { offerPreviews: true, keepInTray: false, dailyCheck: true, askedStartWithWindows: true },
   startWithWindows: false,
   policy: { checks: true, startWithWindows: true, previews: true },
   jobs: [],
-  repository: "https://github.com/jasonswrench-beep/openstage-hub",
+  repository: `https://github.com/${brandApps.hub.repository}`,
 };
+view.updatesReady = view.apps.filter((x) => x.update).length;
 
 const cancelled = new Set<string>();
 
-/** A pretend install: Downloading with progress, Checking, Installing, then done (or a checksum problem for Capture Express, to show one). */
+/** A pretend install: Downloading with progress, Checking, Installing, then done (or a checksum problem for one app, to show one). */
 function pretend(id: string) {
   const a = view.apps.find((x) => x.id === id)!;
   const total = a.offer!.size;
@@ -85,7 +84,7 @@ function pretend(id: string) {
       window.clearInterval(tick);
       window.setTimeout(() => send({ stage: "checking", message: "Checking" }), 400);
       window.setTimeout(() => {
-        if (id === "openstage-capture-express") return send({ stage: "failed", message: "The download did not match its checksum, so nothing was installed." });
+        if (id === failing) return send({ stage: "failed", message: "The download did not match its checksum, so nothing was installed." });
         send({ stage: "installing", message: "Installing" });
         window.setTimeout(() => {
           a.installed = { version: a.offer!.version, exact: true, folderKnown: true };
@@ -149,19 +148,6 @@ function pretend(id: string) {
     }
   },
 };
-
-// The apps' real icons from catalog/icons, as the hub hands them to the window (data: addresses). Capture Express keeps its round mark,
-// to show how a row looks when its icon has not been fetched.
-async function dataUrl(path: string): Promise<string | null> {
-  const answer = await fetch(path);
-  if (!answer.ok) return null;
-  const bytes = new Uint8Array(await answer.arrayBuffer());
-  let text = "";
-  for (const b of bytes) text += String.fromCharCode(b);
-  return `data:image/png;base64,${btoa(text)}`;
-}
-for (const a of view.apps) if (a.id !== "openstage-capture-express") a.icon = await dataUrl(`/catalog/icons/${a.id}.png`);
-for (const c of view.comingSoon) c.icon = await dataUrl(`/catalog/icons/${c.id}.png`);
 
 // The real page: its markup, then its code.
 const html = await (await fetch("/index.html")).text();

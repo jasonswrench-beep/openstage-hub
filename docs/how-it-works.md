@@ -1,4 +1,6 @@
-# How OpenStage Hub works
+# How OpenStage Hub and Prism Hub work
+
+Both hubs are one program, built from this repository. Everything that makes it one hub or the other is in its folder in `brands/` (see "Two hubs, one program" at the end). The examples here are OpenStage Hub's; Prism Hub's are the same with its own names, addresses and key.
 
 ## The window
 
@@ -8,12 +10,12 @@ A native window (Tauri: a Rust shell with a TypeScript page) of about 470 by 720
 
 The hub reads one small signed file instead of asking GitHub about each app: the repositories name their installers in different ways, and GitHub's unsigned lookup allows only 60 requests an hour per network, which a shared campus network can use up. Release downloads have no such limit.
 
-- It lives at `https://github.com/jasonswrench-beep/openstage-hub/releases/download/catalog/openstage-catalog.json`, with `openstage-catalog.json.sig` beside it.
-- The signature is Ed25519 over the file's exact bytes. The public half of the hub key is built into the program (`brand/brand.json`, `catalogPublicKey`). A catalog that fails the check is ignored.
+- It lives on the release named `catalog` in the hub's own repository: `https://github.com/jasonswrench-beep/openstage-hub/releases/download/catalog/openstage-catalog.json`, with `openstage-catalog.json.sig` beside it (Prism Hub: `prism-hub`, `prism-catalog.json`).
+- The signature is Ed25519 over the file's exact bytes. The public half of that hub's key is built into the program (`brands/<brand>/brand.json`, `catalogPublicKey`). Each hub has its own key, so neither trusts the other's catalog. A catalog that fails the check is ignored.
 - Every address in it must be `https://github.com/<that app's repository>/releases/download/...`; every checksum, version, switch and file name is checked before it is used (`src-tauri/src/catalog.rs`).
 - A catalog older than the one already on disk is refused, so an old signed catalog cannot be replayed to offer older installers.
 - A catalog that needs a newer hub (`minimumHubVersion`, or a higher `format`) shows only the hub's update banner.
-- Each app's icon is published beside the catalog, on the same release, with its SHA-256 in the signed catalog. The hub fetches an icon once, keeps it only if its SHA-256 matches, and checks it again whenever it shows it. Until then, or if it fails a check, the row shows the app's round mark instead. Icons are decorative; the app's name is always text beside it.
+- Each app's icon is inside the signed catalog, as a `data:` address of an SVG or PNG picture of at most 32 KB, so it is never downloaded on its own and is there offline. The window shows it as an image, which can run nothing and load nothing. An app without one shows its round mark. Icons are decorative; the app's name is always text beside it.
 
 [catalog.md](catalog.md) has the format.
 
@@ -58,7 +60,7 @@ Closing the window quits the hub unless the tray is on; then the window is close
 
 ## When the network is used
 
-- When the window opens, and when the person presses Check for updates: the catalog and its signature (two small files), and any app icon not already on this computer.
+- When the window opens, and when the person presses Check for updates: the catalog and its signature (two small files).
 - While in the tray, once a day if that setting is on: the same two files. The thread wakes at most every six hours to look at the clock, because a computer that sleeps overnight does not count that time.
 - When the person presses Install, Update, Reinstall or Other downloads: that one file.
 
@@ -66,7 +68,7 @@ Nothing else. No usage data, no list of installed apps and no identifier ever le
 
 ## What is kept on disk
 
-Under `%LOCALAPPDATA%\org.openstage.hub`: `settings.json` (settings, the exact release the hub installed for each app, which versions were already announced, when the catalog was last fetched), `catalog\` (the last good catalog and its signature, checked again every time they are read), and `downloads\` (emptied after every install and when the hub starts).
+Under `%LOCALAPPDATA%\org.openstage.hub`: `settings.json` (settings, the exact release the hub installed for each app, which versions were already announced, when the catalog was last fetched), `catalog\` (the last good catalog and its signature, checked again every time they are read), and `downloads\` (emptied after every install and when the hub starts). Prism Hub's folder is `%LOCALAPPDATA%\org.prismopenresearch.hub`. (OpenStage Hub 1.0.1 also kept an `icons\` folder; 1.0.2 removes it when it starts.)
 
 ## Development switches
 
@@ -78,3 +80,9 @@ A development build (not a release build) also reads:
 - `--print-view`: prints what the window would show, after fetching the catalog, and stops.
 
 `tests/ui-preview.html` (with `npm run dev`, at `http://localhost:1430/tests/ui-preview.html`) runs the real window code against a stand-in for the Rust side, for looking at every row state and testing by keyboard and screen reader.
+
+## Two hubs, one program
+
+`brands/openstage` and `brands/prism` each hold one hub's `brand.json` (name, identifier, colours, repository, catalog file names, the public half of its key, the signer, the other hub's link), its icon and the program icons drawn from it (`app-icons`, by `tools/make-icons.mjs`), its list of apps (`apps.json`) with their icons, and the setup file names its tests check (`setup-names.json`).
+
+Every script takes the brand as `--brand <folder>` or the `HUB_BRAND` setting; the `.bat` files pass it (Build, Run and Update for each hub, and one Make Hub Key.bat that asks which). Before a build, `tools/apply-brand.mjs` writes `src-tauri/tauri.conf.json` from `src-tauri/tauri.base.json` and the brand; that file is not in the repository. `src-tauri/build.rs` reads the same brand into the program and stops if `tauri.conf.json` was set up for the other one. The window gets its brand from Vite (`virtual:brand`, in `vite.config.ts`). Nothing else in the code names either hub, and both hubs share one version number.

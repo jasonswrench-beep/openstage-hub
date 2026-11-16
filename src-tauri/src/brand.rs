@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The brand: every value that makes this program one hub rather than the other (OpenStage Hub or Prism Hub), read from brand/brand.json when the program is built.
+//! The brand: every value that makes this program one hub rather than the other (OpenStage Hub or Prism Hub), read from brands/<brand>/brand.json (HUB_BRAND_DIR, set by build.rs) when the program is built.
 //! Nothing brand-specific is written anywhere else in the Rust code.
 
 use serde::Deserialize;
@@ -32,11 +32,11 @@ pub struct Sibling {
     pub url: String,
 }
 
-pub const BRAND_JSON: &str = include_str!("../../brand/brand.json");
+pub const BRAND_JSON: &str = include_str!(concat!(env!("HUB_BRAND_DIR"), "/brand.json"));
 
 pub fn brand() -> &'static Brand {
     static BRAND: OnceLock<Brand> = OnceLock::new();
-    BRAND.get_or_init(|| serde_json::from_str(BRAND_JSON).expect("brand/brand.json is read when the program is built"))
+    BRAND.get_or_init(|| serde_json::from_str(BRAND_JSON).expect("the brand file is read when the program is built"))
 }
 
 impl Brand {

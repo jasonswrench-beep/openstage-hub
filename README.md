@@ -1,4 +1,4 @@
-<p align="center"><img src="brand/OpenStage-Suite.svg" width="96" alt="The OpenStage Suite icon: a stage with rainbow curtains and four people in the audience, on a navy tile"></p>
+<p align="center"><img src="brands/openstage/OpenStage-Suite.svg" width="96" alt="The OpenStage Suite icon: a stage with rainbow curtains and four people in the audience, on a navy tile"></p>
 
 # OpenStage Hub
 
@@ -30,7 +30,7 @@ A `policy.json` file beside `openstage-hub.exe` can turn off update checks, turn
 ## How it works
 
 - [docs/how-it-works.md](docs/how-it-works.md): the catalog, the six install steps, what is kept on disk, and what is sent over the network.
-- [docs/catalog.md](docs/catalog.md): the catalog's format and how to update it (`Update OpenStage Catalog.bat`).
+- [docs/catalog.md](docs/catalog.md): the catalog's format and how to update it (`Update OpenStage Catalog.bat`, `Update Prism Catalog.bat`).
 - [docs/releasing.md](docs/releasing.md): making the hub key, building and signing the hub, and publishing a release.
 - [TESTING-TODO.md](TESTING-TODO.md): the checks only a person can do.
 
@@ -38,4 +38,6 @@ A `policy.json` file beside `openstage-hub.exe` can turn off update checks, turn
 
 Double-click `Run OpenStage Hub.bat` to run a development copy, or `Build OpenStage Hub.bat` to make an installer. Both need Node.js and Rust.
 
-Every brand-specific value (name, identifier, Start menu folder, icon, accent colours, catalog address, the catalog's public key) is in [brand/brand.json](brand/brand.json), so Prism Hub can share this code with its own brand file.
+## Prism Hub
+
+[Prism Hub](https://github.com/jasonswrench-beep/prism-hub/releases), the same program for the PrismOpenResearch apps, is built from this code too: `Run Prism Hub.bat`, `Build Prism Hub.bat` and `Update Prism Catalog.bat`. Every brand-specific value (name, identifier, Start menu folder, icon, accent colours, catalog address, the catalog's public key, the list of apps) is in the hub's folder in [brands/](brands), so a change to how the hub behaves is made once and both hubs get it. Prism Hub's installers and catalog are still published in its own repository.

@@ -6,9 +6,12 @@ src-tauri/gen/
 .DS_Store
 Thumbs.db
 
-# The catalog script's working files (downloaded installers while it computes their SHA-256).
-catalog/work/
-catalog/out/
+# Written for whichever hub is being built (tools/apply-brand.mjs), from src-tauri/tauri.base.json and the brand.
+src-tauri/tauri.conf.json
+
+# The catalog script's working files, per brand (downloaded installers while it computes their SHA-256, and the signed catalog it made).
+brands/*/work/
+brands/*/out/
 
 # The hub key's private half never goes into the repository.
 hub-key/

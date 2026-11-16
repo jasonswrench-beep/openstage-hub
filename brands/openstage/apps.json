@@ -1,5 +1,5 @@
 {
-  "_about": "The fixed facts about each app that GitHub cannot tell the catalog script: its mark, how Windows lists it, its program file and its installer's quiet switch. Update OpenStage Catalog.bat adds each app's newest stable and preview release (address, SHA-256, size) and writes the signed catalog. docs/catalog.md explains every field.",
+  "_about": "The fixed facts about each app that GitHub cannot tell the catalog script: its mark, how Windows lists it, its program file and its installer's quiet switch. Update OpenStage Catalog.bat adds each app's newest stable and preview release (address, SHA-256, size) and writes the signed catalog. The icon each mark names (in this folder) goes into the signed catalog as a picture. docs/catalog.md explains every field.",
   "minimumHubVersion": "1.0.0",
   "hub": {
     "repository": "jasonswrench-beep/openstage-hub",
@@ -8,9 +8,8 @@
   "apps": [
     {
       "id": "openstage-author",
-      "icon": "icons/openstage-author.png",
       "name": "OpenStage Author",
-      "mark": { "letters": "au", "color": "#5B3FC4" },
+      "mark": { "letters": "au", "color": "#5B3FC4", "icon": "icons/openstage-author.png" },
       "description": "The main authoring studio",
       "repository": "jasonswrench-beep/openstage-author",
       "installedAs": "OpenStage Author",
@@ -21,9 +20,8 @@
     },
     {
       "id": "openstage-recorder",
-      "icon": "icons/openstage-recorder.png",
       "name": "OpenStage Recorder",
-      "mark": { "letters": "re", "color": "#B42318" },
+      "mark": { "letters": "re", "color": "#B42318", "icon": "icons/openstage-recorder.png" },
       "description": "A light screen recorder with a simple editor",
       "repository": "jasonswrench-beep/openstage-recorder",
       "installedAs": "OpenStage Recorder",
@@ -37,9 +35,8 @@
     },
     {
       "id": "openassess",
-      "icon": "icons/openassess.png",
       "name": "OpenAssess",
-      "mark": { "letters": "as", "color": "#0F7B6C" },
+      "mark": { "letters": "as", "color": "#0F7B6C", "icon": "icons/openassess.png" },
       "description": "Turns test banks into LMS-ready quizzes",
       "repository": "jasonswrench-beep/openstage-assess",
       "installedAs": "OpenAssess",
@@ -50,9 +47,8 @@
     },
     {
       "id": "openexplainer",
-      "icon": "icons/openexplainer.png",
       "name": "OpenExplainer",
-      "mark": { "letters": "ex", "color": "#6B5BD2" },
+      "mark": { "letters": "ex", "color": "#6B5BD2", "icon": "icons/openexplainer.png" },
       "description": "Still-image tutorials and how-to books",
       "repository": "jasonswrench-beep/OpenExplainer",
       "installedAs": "OpenExplainer",
@@ -65,9 +61,8 @@
     },
     {
       "id": "openstage-capture-express",
-      "icon": "icons/openstage-capture-express.png",
       "name": "OpenStage Capture Express",
-      "mark": { "letters": "ce", "color": "#B54708" },
+      "mark": { "letters": "ce", "color": "#B54708", "icon": "icons/openstage-capture-express.png" },
       "description": "Step-by-step guide maker",
       "repository": "jasonswrench-beep/openstage-capture-express",
       "installedAs": "OpenStage Capture Express",
@@ -79,9 +74,8 @@
     },
     {
       "id": "openstage-guide",
-      "icon": "icons/openstage-guide.png",
       "name": "OpenStage Guide",
-      "mark": { "letters": "gu", "color": "#1D6FB8" },
+      "mark": { "letters": "gu", "color": "#1D6FB8", "icon": "icons/openstage-guide.png" },
       "description": "Facilitator guides and participant workbooks",
       "repository": "jasonswrench-beep/OpenStageGuide",
       "installedAs": "OpenStage Guide",
@@ -92,9 +86,8 @@
     },
     {
       "id": "pdf-remediator",
-      "icon": "icons/pdf-remediator.png",
       "name": "PDF Remediator",
-      "mark": { "letters": "pd", "color": "#C11574" },
+      "mark": { "letters": "pd", "color": "#C11574", "icon": "icons/pdf-remediator.png" },
       "description": "Drafts accessibility repairs for PDFs",
       "repository": "jasonswrench-beep/PDFRemediator",
       "installedAs": "PDF Remediator",
@@ -105,9 +98,8 @@
     },
     {
       "id": "openstage-studio",
-      "icon": "icons/openstage-studio.png",
       "name": "OpenStage Studio",
-      "mark": { "letters": "st", "color": "#0E6E8C" },
+      "mark": { "letters": "st", "color": "#0E6E8C", "icon": "icons/openstage-studio.png" },
       "description": "Narrated, captioned tutorial videos from a script",
       "repository": "jasonswrench-beep/OpenStage_Studio",
       "installedAs": "OpenStage Studio",
@@ -117,6 +109,36 @@
       "setupPattern": "^OpenStage[-. _]Studio.*[Ss]etup\\.exe$",
       "comingSoonUntilReleased": true,
       "_comingSoonUntilReleased": "Listed under Coming soon until its repository is public and has a published, signed release; then the catalog script moves it to Desktop by itself."
+    },
+    {
+      "id": "openstage-package-doctor",
+      "name": "OpenStage Package Doctor",
+      "mark": { "letters": "pk", "color": "#4D7C0F" },
+      "description": "Opens and repairs a course package with no source file",
+      "repository": "jasonswrench-beep/openstage-package-doctor",
+      "installedAs": "OpenStage Package Doctor",
+      "programFile": "openstage-package-doctor.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenStage[-. _]Package[-. _]Doctor.*[Ss]etup\\.exe$",
+      "hiddenUntilRepositoryExists": true,
+      "comingSoonUntilReleased": true,
+      "_hiddenUntilRepositoryExists": "Left out of the catalog until the repository exists (private is enough), then listed under Coming soon until it is public with a signed release. The program file and quiet switch are what a Tauri app made like the others would have; check them when its first release is made."
+    },
+    {
+      "id": "openstage-rehearse",
+      "name": "OpenStage Rehearse",
+      "mark": { "letters": "rh", "color": "#7A2E8E" },
+      "description": "Practise a speech and see its pace, pauses and structure",
+      "repository": "jasonswrench-beep/openstage-rehearse",
+      "installedAs": "OpenStage Rehearse",
+      "programFile": "openstage-rehearse.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^OpenStage[-. _]Rehearse.*[Ss]etup\\.exe$",
+      "hiddenUntilRepositoryExists": true,
+      "comingSoonUntilReleased": true,
+      "_hiddenUntilRepositoryExists": "As for Package Doctor."
     }
   ],
   "web": [

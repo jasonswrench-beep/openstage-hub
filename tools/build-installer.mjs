@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 // Makes the hub's installer, on this PC (or on GitHub's build machine, without signing).
 //
-//   node tools/build-installer.mjs            build the setup file (not signed)
-//   node tools/build-installer.mjs --sign     build it, and sign every program in it and the setup itself
+//   node tools/build-installer.mjs --brand <folder>          build that hub's setup file (not signed)
+//   node tools/build-installer.mjs --brand <folder> --sign   build it, and sign every program in it and the setup itself
+// Both hubs are built from this code; the brand (a folder in brands/) gives the program its name, icons, key and catalog.
 //
 // What it does, in order (the same steps as OpenExplainer's tools/build-installer.mjs):
-//   1. copies the brand file's values into tauri.conf.json, and checks that the version in Cargo.toml, tauri.conf.json and package.json is
-//      RELEASE (below), and that the hub key's public half is in the brand file (a hub without it can trust no catalog);
+//   1. sets tauri.conf.json up for the brand (tools/apply-brand.mjs), and checks that the version in Cargo.toml, tauri.conf.json and package.json is
+//      RELEASE (below), and that the hub key's public half is in the brand's brand.json (a hub without it can trust no catalog);
 //   2. builds the program and its installer with Tauri, with --remap-path-prefix for the user folder, Rust's folders and this repository,
 //      so no folder name of the building computer is written into the program;
 //   3. checks Tauri's installer script carries the web view's setup inside (never downloaded while installing);
@@ -22,13 +23,21 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { applyBrand } from "./apply-brand.mjs";
+import { loadBrand } from "./brand.mjs";
 
 /** The release this build is. Raise it for every release; the hub compares it with the catalog's hub entry. Tags are v<RELEASE>. */
-export const RELEASE = "1.0.1";
+export const RELEASE = "1.0.2";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const tauriDir = join(root, "src-tauri");
-const brand = JSON.parse(readFileSync(join(root, "brand", "brand.json"), "utf8"));
+let chosen;
+try {
+  chosen = loadBrand();
+} catch (e) {
+  console.error(`STOPPED: ${e.message}`);
+  process.exit(1);
+}
+const brand = chosen.brand;
 const appExe = join(tauriDir, "target", "release", `${brand.programName}.exe`);
 const nsisScript = join(tauriDir, "target", "release", "nsis", "x64", "installer.nsi");
 const bundleDir = join(tauriDir, "target", "release", "bundle", "nsis");
@@ -60,6 +69,8 @@ function rustEnv(more = {}) {
   const env = { ...process.env, ...more };
   delete env.RUSTFLAGS;
   env.CARGO_ENCODED_RUSTFLAGS = folderFlags().join("\x1f");
+  // The window\'s build (Vite) and the program\'s (build.rs) read the brand from here.
+  env.HUB_BRAND = chosen.id;
   return env;
 }
 
@@ -137,12 +148,12 @@ function main(argv) {
   say(`${brand.productName} ${RELEASE}: building the installer${sign ? " and signing it" : ""}.`);
 
   say("1. The brand and the version.");
-  applyBrand();
+  applyBrand({ id: chosen.id });
   const v = versionsMatch();
   if (!v.ok) fail(`the version must be ${RELEASE} everywhere: tauri.conf.json says ${v.conf}, package.json ${v.pkg}, Cargo.toml ${v.cargo}.`);
   if (!brand.catalogPublicKey) {
-    if (sign) fail("brand/brand.json has no hub key yet (Make Hub Key.bat makes it). A released hub without it could trust no catalog.");
-    say("  NOTE: no hub key in brand/brand.json yet, so this copy will trust no catalog. Fine for trying the window; not for a release.");
+    if (sign) fail(`brands/${chosen.id}/brand.json has no hub key yet (Make Hub Key.bat makes it). A released hub without it could trust no catalog.`);
+    say("  NOTE: no hub key in the brand's brand.json yet, so this copy will trust no catalog. Fine for trying the window; not for a release.");
   }
   say(`  ${brand.productName}, ${brand.identifier}, version ${RELEASE}`);
 

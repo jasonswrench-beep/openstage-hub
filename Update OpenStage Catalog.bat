@@ -8,7 +8,7 @@ echo Run it after any app release. Until it runs, the hub keeps offering the pre
 echo.
 where node >nul 2>nul || (echo Node.js is not installed. Get it from nodejs.org, then run this again. & goto :end)
 where gh >nul 2>nul || (echo The GitHub command line is not installed. Get it from cli.github.com, then run this again. & goto :end)
-node tools\update-catalog.mjs %*
+node tools\update-catalog.mjs --brand openstage %*
 :end
 echo.
 pause

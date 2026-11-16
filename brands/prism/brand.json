@@ -1,0 +1,28 @@
+{
+  "_about": "Every value that makes this program Prism Hub rather than the other hub. Nothing brand-specific lives anywhere else: this folder also holds the icon named here, the program icons made from it (app-icons, by tools/make-icons.mjs), the list of apps (apps.json) and their icons. Every script takes the brand as --brand prism (the .bat files pass it).",
+  "productName": "Prism Hub",
+  "shortName": "Prism",
+  "identifier": "org.prismopenresearch.hub",
+  "programName": "prism-hub",
+  "startMenuFolder": "PrismOpenResearch",
+  "publisher": "Jason Wrench",
+  "icon": "PrismOpenResearch.svg",
+  "colors": {
+    "brand": "#5B45E0",
+    "navy": "#151A3D",
+    "accentLight": "#151A3D",
+    "accentDark": "#AAB4FF"
+  },
+  "repository": "jasonswrench-beep/prism-hub",
+  "catalog": {
+    "tag": "catalog",
+    "file": "prism-catalog.json",
+    "signature": "prism-catalog.json.sig"
+  },
+  "catalogPublicKey": "D8nRvNbgChVmGlrpyd6lJiD15pM3aNYedSRlHE3Z2aM=",
+  "expectedSigner": "Jason Wrench",
+  "sibling": {
+    "label": "Also from Jason Wrench: OpenStage Hub",
+    "url": "https://github.com/jasonswrench-beep/openstage-hub/releases"
+  }
+}

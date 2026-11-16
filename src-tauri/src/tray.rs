@@ -19,7 +19,7 @@ const ID: &str = "hub";
 const DAY: u64 = 24 * 60 * 60;
 
 fn icon(dot: bool) -> Option<Image<'static>> {
-    let bytes: &'static [u8] = if dot { include_bytes!("../icons/tray-dot.png") } else { include_bytes!("../icons/tray.png") };
+    let bytes: &'static [u8] = if dot { include_bytes!(concat!(env!("HUB_BRAND_DIR"), "/app-icons/tray-dot.png")) } else { include_bytes!(concat!(env!("HUB_BRAND_DIR"), "/app-icons/tray.png")) };
     Image::from_bytes(bytes).ok()
 }
 

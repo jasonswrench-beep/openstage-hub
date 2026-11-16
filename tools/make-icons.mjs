@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
-// Makes every icon the hub needs from the brand's SVG (brand/brand.json names it):
-//   src-tauri/icons/*            the program's and the installer's icons (Tauri's own icon command makes them from a 1024 picture)
-//   src-tauri/icons/tray.png     the tray icon
-//   src-tauri/icons/tray-dot.png the tray icon with the small dot that means an update is ready
-//   public/mark.svg              the mark in the window's header
+// Makes every icon a hub needs from its brand's SVG (the brand's brand.json names it), into brands/<brand>/app-icons:
+//   32x32.png ... icon.ico  the program's and the installer's icons (Tauri's own icon command makes them from a 1024 picture)
+//   tray.png                the tray icon
+//   tray-dot.png            the tray icon with the small dot that means an update is ready
+// The window's header shows the SVG itself.
 //
 // The SVG is drawn in headless Microsoft Edge (the same way as OpenStage Author's tools/svg_to_png.mjs, credited in NOTICE), so this needs Edge
-// and Node. Run it after changing the brand's icon: node tools/make-icons.mjs
+// and Node. Run it after changing a brand's icon: node tools/make-icons.mjs --brand <folder>
 import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { loadBrand, root } from "./brand.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const brand = JSON.parse(readFileSync(join(root, "brand", "brand.json"), "utf8"));
-const iconsDir = join(root, "src-tauri", "icons");
+const { brand, dir: brandDir } = loadBrand();
+const iconsDir = join(brandDir, "app-icons");
 const EDGE = ["C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "C:/Program Files/Microsoft/Edge/Application/msedge.exe"].find(existsSync);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -65,10 +64,9 @@ async function draw(pages) {
   }
 }
 
-const svg = readFileSync(join(root, brand.icon), "utf8");
+const svg = readFileSync(join(brandDir, brand.icon), "utf8");
 const work = mkdtempSync(join(tmpdir(), "hub-icons-"));
 mkdirSync(iconsDir, { recursive: true });
-mkdirSync(join(root, "public"), { recursive: true });
 const big = join(work, "icon-1024.png");
 await draw([
   { svg, size: 1024, out: big },
@@ -81,6 +79,5 @@ const made = join(work, "tauri");
 const done = spawnSync(process.execPath, [join(root, "node_modules", "@tauri-apps", "cli", "tauri.js"), "icon", big, "-o", made], { stdio: "inherit" });
 if (done.status !== 0) throw new Error("Tauri's icon command failed.");
 for (const name of ["32x32.png", "128x128.png", "128x128@2x.png", "icon.ico", "icon.png"]) copyFileSync(join(made, name), join(iconsDir, name));
-writeFileSync(join(root, "public", "mark.svg"), svg);
 rmSync(work, { recursive: true, force: true });
 console.log(`Icons made from ${brand.icon}: ${readdirSync(iconsDir).join(", ")}`);

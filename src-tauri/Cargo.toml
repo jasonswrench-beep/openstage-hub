@@ -1,20 +1,23 @@
 [package]
-name = "openstage-hub"
-version = "1.0.1"
+# One program for both hubs; the brand (brands/<folder>, chosen when it is built) gives it its name. See src-tauri/build.rs.
+name = "suite-hub"
+version = "1.0.2"
 edition = "2021"
 license = "Apache-2.0"
-description = "Lists the OpenStage apps and installs, updates and opens each one from its signed GitHub release"
+description = "Lists every app in a suite and installs, updates and opens each one from its signed GitHub release"
 
 [lib]
 name = "hub"
 path = "src/lib.rs"
 
 [[bin]]
-name = "openstage-hub"
+name = "suite-hub"
 path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# Reading the brand's identifier in build.rs.
+serde_json = "1"
 
 [dependencies]
 # The window, the tray icon and its two pictures (with and without the "update ready" dot).
@@ -27,7 +30,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The SHA-256 of every downloaded installer, checked against the catalog.
 sha2 = "0.10"
-# The catalog's signature (Ed25519), checked with the public half of the hub key built into brand/brand.json.
+# The catalog's signature (Ed25519), checked with the public half of the hub key built into the brand file.
 ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 base64 = "0.22"
 
