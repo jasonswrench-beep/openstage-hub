@@ -6,6 +6,8 @@
 // Both hubs are built from this code; the brand (a folder in brands/) gives the program its name, icons, key and catalog.
 //
 // What it does, in order (the same steps as OpenExplainer's tools/build-installer.mjs):
+//   0. with --sign, stops unless everything is committed and HEAD is the commit tagged v<RELEASE> (tools/release-check.mjs), so the release
+//      tag names the exact commit the installer came from; it checks again at the end that the build changed no tracked file;
 //   1. sets tauri.conf.json up for the brand (tools/apply-brand.mjs), and checks that the version in Cargo.toml, tauri.conf.json and package.json is
 //      RELEASE (below), and that the hub key's public half is in the brand's brand.json (a hub without it can trust no catalog);
 //   2. builds the program and its installer with Tauri, with --remap-path-prefix for the user folder, Rust's folders and this repository,
@@ -24,6 +26,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { applyBrand } from "./apply-brand.mjs";
 import { loadBrand } from "./brand.mjs";
+import { gitState, releaseProblems } from "./release-check.mjs";
 
 /** The release this build is. Raise it for every release; the hub compares it with the catalog's hub entry. Tags are v<RELEASE>. */
 export const RELEASE = "1.0.2";
@@ -143,9 +146,20 @@ function versionsMatch() {
   return { conf, pkg, cargo, ok: conf === RELEASE && pkg === RELEASE && cargo === RELEASE };
 }
 
+function committedAndTagged(when) {
+  const problems = releaseProblems(gitState(root, RELEASE), RELEASE);
+  if (problems.length > 0) fail(`a signed build must come from the commit tagged v${RELEASE}, with nothing uncommitted (${when}):\n  - ${problems.join("\n  - ")}`);
+}
+
 function main(argv) {
   const sign = argv.includes("--sign");
   say(`${brand.productName} ${RELEASE}: building the installer${sign ? " and signing it" : ""}.`);
+
+  if (sign) {
+    say("0. The commit.");
+    committedAndTagged("before building");
+    say(`  everything is committed, and HEAD is the commit tagged v${RELEASE}`);
+  }
 
   say("1. The brand and the version.");
   applyBrand({ id: chosen.id });
@@ -193,6 +207,12 @@ function main(argv) {
   const digest = createHash("sha256").update(readFileSync(final)).digest("hex");
   writeFileSync(`${final}.sha256.txt`, `${digest}  ${name}\n`);
   const bytes = statSync(final).size;
+  if (sign && releaseProblems(gitState(root, RELEASE), RELEASE).length > 0) {
+    // Removed so it cannot be published by mistake.
+    rmSync(final, { force: true });
+    rmSync(`${final}.sha256.txt`, { force: true });
+    committedAndTagged("after building: the build changed something git tracks, so the setup may not match the tag and was removed");
+  }
   say(`Done: ${final} (${(bytes / 1048576).toFixed(2)} MB, ${bytes <= TARGET_BYTES ? "under" : "OVER"} the 8 MB target)\n  SHA-256 ${digest}`);
 }
 

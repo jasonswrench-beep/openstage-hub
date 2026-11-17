@@ -16,7 +16,7 @@ The hub's repository must be **public** before any hub can download the catalog 
 
 1. Raise `RELEASE` in `tools/build-installer.mjs`, and the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.base.json`, to the new version (such as `1.0.2`). The build stops if they differ.
 2. Run the checks: `npm test`, `npm run typecheck`, and for each brand `node tools/apply-brand.mjs --brand <brand>` then `cargo test` in `src-tauri`.
-3. Commit and push.
+3. Commit everything, tag that commit `v<version>`, and push both (`git push origin main v<version>`). `git status` must be clean: the tag has to point at the exact commit the installers are built from. If the build then shows something to fix, commit the fix and move the tag to it while no release uses it yet; a published tag is never moved.
 4. On the owner's computer, signed in to the signing service (`az login`), in a PowerShell window where the four signing settings are set first. They are the same account and profile names every app in both suites is signed with; they are not secret, but they are kept out of this public repository, so take them from your own notes:
 
    ```powershell
@@ -28,8 +28,8 @@ The hub's repository must be **public** before any hub can download the catalog 
    node tools/build-installer.mjs --brand prism --sign
    ```
 
-   Without them the build stops at once with "these are not set". It stops on any problem: a missing hub key, a program that names this computer's user folder, an installer that would download the web view's setup, or a program in the setup that is not signed and timestamped. Each writes `src-tauri/target/release-files/<Product-Name>-<version>-Setup.exe` (`OpenStage-Hub-...`, `Prism-Hub-...`) and its `.sha256.txt`, and says whether the setup is under 8 MB.
-5. In each hub's repository, make the release with exactly that hub's two files, tagged `v<version>`, with notes in plain words: what changed, who signed it, the SHA-256, and what has not been tried. The tag in `openstage-hub` is at the pushed commit; `prism-hub` holds only releases and a pointer to this code, so its tag names the same version and its notes name this repository's commit.
+   A signed build first checks step 3: it stops at once if anything is uncommitted or untracked, or if the commit checked out is not the one tagged `v<version>`, and it checks again when it has finished, removing the setup if the build changed a file git tracks. Without the four signing settings it stops with "these are not set". It stops on any problem: a missing hub key, a program that names this computer's user folder, an installer that would download the web view's setup, or a program in the setup that is not signed and timestamped. Each writes `src-tauri/target/release-files/<Product-Name>-<version>-Setup.exe` (`OpenStage-Hub-...`, `Prism-Hub-...`) and its `.sha256.txt`, and says whether the setup is under 8 MB.
+5. In each hub's repository, make the release with exactly that hub's two files, tagged `v<version>`, with notes in plain words: what changed, who signed it, the SHA-256, and what has not been tried. In `openstage-hub` the release uses the tag made in step 3; `prism-hub` holds only releases and a pointer to this code, so its tag names the same version and its notes name this repository's commit.
 6. Run **Update OpenStage Catalog.bat** and **Update Prism Catalog.bat**, so each catalog's hub entry names the new release. Installed hubs then offer the update.
 
 The first release of a hub is installed by hand from GitHub. Updates work from then on.

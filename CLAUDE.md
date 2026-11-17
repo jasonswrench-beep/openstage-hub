@@ -33,6 +33,12 @@ Every brand-specific value lives in the hub's folder in `brands/` (`brand.json`,
 
 Permissive licences only (MIT, BSD, Apache 2.0, ISC). GPL and AGPL are refused. Record anything adopted in `NOTICE`.
 
+## Commits and releases
+
+- Commit as `jasonswrench-beep <324576087+jasonswrench-beep@users.noreply.github.com>`. It is set in this repository's own git config; check `git config user.name` and `git config user.email` before every commit.
+- No `Co-Authored-By` lines and no "Generated with Claude Code" lines in any commit message, tag or pull request, ever.
+- Commit everything and tag that commit (`v<version>`) before building any installer, so each release tag points at the exact commit the build came from. `git status` must be clean when the build starts; `tools/build-installer.mjs --sign` checks both and stops otherwise (`tools/release-check.mjs`). This holds for hub 1.0.2 too. If something has to change after tagging and before the release is published, commit the fix and move the unpublished tag to it; a published tag is never moved.
+
 ## Working style
 
 - Explain changes in plain language.
