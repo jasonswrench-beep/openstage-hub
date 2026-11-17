@@ -1,6 +1,8 @@
 {
   "_about": "The fixed facts about each app that GitHub cannot tell the catalog script: its mark, how Windows lists it, its program file and its installer's quiet switch. Update OpenStage Catalog.bat adds each app's newest stable and preview release (address, SHA-256, size) and writes the signed catalog. The icon each mark names (in this folder) goes into the signed catalog as a picture. docs/catalog.md explains every field.",
   "minimumHubVersion": "1.0.0",
+  "alsoPublishIconFiles": true,
+  "_alsoPublishIconFiles": "OpenStage Hub 1.0.1 reads each app's icon as a separate PNG file beside the catalog; 1.0.2 and later read it inside the catalog. While 1.0.1 hubs are still about, the script publishes both, so their icons stay. Remove this once 1.0.2 has been out long enough for installed hubs to have updated.",
   "hub": {
     "repository": "jasonswrench-beep/openstage-hub",
     "setupPattern": "^OpenStage-Hub-.*-Setup\\.exe$"

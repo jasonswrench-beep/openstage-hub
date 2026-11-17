@@ -18,7 +18,7 @@
 // brands/<folder>/work/checked.json by GitHub's own SHA-256 of each file, so a setup file is downloaded once, not on every run.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
@@ -120,6 +120,21 @@ async function checked(asset, url, expectedSigner, what, memory) {
 /** An app's mark with its icon file (if apps.json names one, in the brand's folder) read into it. */
 const markFor = (mark) => markOf(mark, (path) => readFileSync(join(brandDir, path)));
 
+/**
+ * Icons as separate files, for hubs older than the one that reads them inside the catalog (OpenStage Hub 1.0.1). Only when apps.json asks for
+ * it (alsoPublishIconFiles) and only for PNG icons: each is published beside the catalog as icon-<id>.png and named, with its SHA-256, in the
+ * app's `icon` entry, which newer hubs ignore. Returns that entry, or undefined.
+ */
+const iconFiles = [];
+function iconFileEntry(source) {
+  if (!sources.alsoPublishIconFiles || !/\.png$/i.test(source.mark?.icon ?? "")) return undefined;
+  const file = join(brandDir, source.mark.icon);
+  const bytes = readFileSync(file);
+  const name = `icon-${source.id}.png`;
+  iconFiles.push({ name, file });
+  return { url: downloadUrl(brand.repository, brand.catalog.tag, name), sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length };
+}
+
 /** Whether a repository exists (private counts). Only "not found" means no; any other trouble stops the script. */
 function repositoryExists(repository) {
   const done = spawnSync("gh", ["api", `repos/${repository}`, "--silent"], { encoding: "utf8" });
@@ -149,7 +164,7 @@ async function buildCatalog(memory) {
       const visibility = gh(["repo", "view", source.repository, "--json", "visibility"]).visibility;
       if ((!stable && !preview) || visibility !== "PUBLIC") {
         say(`  Coming soon (${visibility !== "PUBLIC" ? `its repository is ${visibility.toLowerCase()}` : "no published release yet"})`);
-        comingSoon.push({ id: source.id, name: source.name, description: source.description ?? "", mark: markFor(source.mark) });
+        comingSoon.push({ id: source.id, name: source.name, description: source.description ?? "", mark: markFor(source.mark), icon: iconFileEntry(source) });
         continue;
       }
     }
@@ -179,7 +194,9 @@ async function buildCatalog(memory) {
       extras.push({ name: x.name, description: x.description ?? "", fileName: asset.name, url: downloadUrl(source.repository, release.tag_name, asset.name), sha256: sha256(file), size: asset.size });
       rmSync(file, { force: true });
     }
-    apps.push(appEntry({ ...source, mark: markFor(source.mark) }, stableEntry, previewEntry, extras));
+    const built = appEntry({ ...source, mark: markFor(source.mark) }, stableEntry, previewEntry, extras);
+    built.icon = iconFileEntry(source);
+    apps.push(built);
   }
 
   // The hub's own newest release (its catalog release is not a version, so it never counts).
@@ -259,7 +276,12 @@ async function main(argv) {
   const signatureFile = join(out, brand.catalog.signature);
   writeFileSync(catalogFile, bytes);
   writeFileSync(signatureFile, signature);
-  say(`Signed: ${shown(catalogFile)} and its signature.`);
+  const iconCopies = iconFiles.map((i) => {
+    const target = join(out, i.name);
+    copyFileSync(i.file, target);
+    return target;
+  });
+  say(`Signed: ${shown(catalogFile)} and its signature${iconCopies.length ? `, with ${iconCopies.length} icon files for older hubs` : ""}.`);
   if (local) {
     say("--local: not uploaded. A development hub reads this folder when HUB_CATALOG_DIR names it.");
     return;
@@ -275,6 +297,8 @@ async function main(argv) {
     );
   }
   // Both in one upload. A hub that fetches between the two files sees a mismatch and keeps its last good catalog until its next check.
+  // The icon files first, so a hub that reads the new catalog finds every one it names.
+  if (iconCopies.length) gh(["release", "upload", brand.catalog.tag, ...iconCopies, "--repo", brand.repository, "--clobber"], { json: false });
   gh(["release", "upload", brand.catalog.tag, signatureFile, catalogFile, "--repo", brand.repository, "--clobber"], { json: false });
   say(`Published to https://github.com/${brand.repository}/releases/tag/${brand.catalog.tag}`);
 }

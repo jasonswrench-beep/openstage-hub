@@ -27,7 +27,7 @@ On 2026-11-16, after the two hubs became one codebase (version 1.0.2, not releas
 Done for both hubs by 2026-11-15: the hub keys made, both repositories public, both catalogs published, 1.0.0 and 1.0.1 released and signed. The footer links between the two hubs now open (both repositories are public). Still to do:
 
 - [ ] Each app's quiet install switch: below, under "Installing, updating, removing".
-- [ ] Several apps have newer releases than either published catalog names (for example OpenStage Author 0.1.0 alpha 5, PDF Remediator 0.3.0 alpha 8, OpenStage Guide 0.1.0 alpha 10, PrismQDA 0.1.0 beta 2, PrismStatistics 0.2.2). Run **Update OpenStage Catalog.bat** and **Update Prism Catalog.bat** when you next release the hubs (see below), or now if you want them offered sooner.
+- [ ] 2026-11-16: the OpenStage catalog is being republished to offer each app's newest release (Recorder 0.1.0 alpha 5, OpenAssess alpha 29, OpenExplainer 0.2.0 alpha 5, Capture Express alpha 5, Guide alpha 10, PDF Remediator 0.3.0 alpha 9). In an installed hub, Check for updates should then offer these for the apps you have. Prism's catalog was already current.
 
 ## Web links and planned apps (list item 2)
 
@@ -40,7 +40,7 @@ Done for both hubs by 2026-11-15: the hub keys made, both repositories public, b
 
 - [ ] Look over the change and commit it (nothing is committed yet).
 - [ ] Build both hubs signed (`docs/releasing.md`), release 1.0.2 in each hub's own repository, then run both Update Catalog scripts.
-- [ ] After that, an installed OpenStage Hub 1.0.1 shows round marks instead of icons (it read icons as separate files, which the new catalog no longer names) until it takes the 1.0.2 update the same catalog offers. Check that the update arrives and the icons come back.
+- [ ] OpenStage's catalog carries each icon twice for now: inside the catalog for 1.0.2, and as a separate file for 1.0.1 (`alsoPublishIconFiles` in `brands/openstage/apps.json`), so installed 1.0.1 hubs keep their icons. Some weeks after 1.0.2 is out, remove that setting.
 - [ ] An installed Prism Hub 1.0.1 keeps its icons throughout (it already reads them from inside the catalog) and also offers 1.0.2.
 
 ## The window (installed hub, not the development copy), for each hub

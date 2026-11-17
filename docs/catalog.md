@@ -39,6 +39,8 @@ It needs Node.js and the GitHub command line (`gh`), signed in as the owner. Che
 | `comingSoonUntilReleased` | For an app still being made (OpenStage Studio): listed under Coming soon, with its mark, until its repository is public and has a published release; from then on it is a Desktop row like the others, with no change to this file |
 | `hiddenUntilRepositoryExists` | For a planned app whose repository has not been made yet (OpenStage Package Doctor, OpenStage Rehearse): left out of the catalog altogether until the repository exists (private is enough). Used with `comingSoonUntilReleased`, so it then shows under Coming soon until it is released |
 
+At the top of the file, `alsoPublishIconFiles` (OpenStage only, for now) also publishes each PNG icon as a separate file beside the catalog, named in the app's `icon` entry, the way OpenStage Hub 1.0.1 reads icons; newer hubs ignore it.
+
 `web` lists the Web section (an entry with an empty `url` is left out until it has one), and `comingSoon` the Coming soon section.
 
 ### The installers' quiet switches today
@@ -79,7 +81,7 @@ Named in the brand file (`catalog.file`): `openstage-catalog.json` for OpenStage
 }
 ```
 
-A new field can be added without breaking older hubs (they ignore what they do not know). OpenStage Hub 1.0.1 read icons from a separate `apps[].icon` file entry instead of `mark.icon`; given a catalog from 1.0.2's script it shows the round marks until it takes the update the same catalog offers. A change older hubs would misread raises `format` or `minimumHubVersion`, and those hubs then show only their update banner.
+A new field can be added without breaking older hubs (they ignore what they do not know). OpenStage Hub 1.0.1 reads icons from the separate `apps[].icon` file entry, not `mark.icon`, which is why OpenStage's catalog carries both for now. A change older hubs would misread raises `format` or `minimumHubVersion`, and those hubs then show only their update banner.
 
 ## Stable and preview
 
