@@ -55,7 +55,7 @@ Done for both hubs by 2026-11-15: the hub keys made, both repositories public, b
 ## The window (installed hub, not the development copy), for each hub
 
 - [ ] It opens about 470 by 720 with the hub's own icon and name (the OpenStage Suite icon and "OpenStage Hub"; the PrismOpenResearch icon and "Prism Hub").
-- [ ] OpenStage Hub lists its seven apps, then OpenStage Studio and OpenStage Package Doctor reading "No release yet", and the Web links. Prism Hub lists its four apps (Prism Transcribe last). Every app shows its own icon.
+- [ ] OpenStage Hub lists its seven apps, then OpenStage Studio and OpenStage Package Doctor reading "No release yet", and the Web links. Prism Hub lists its five apps (Prism Transcribe and Prism Survey last). Every app shows its own icon.
 - [ ] First run asks about Start with Windows once, with "Not now" first. It does not ask again.
 - [ ] Apps installed before the hub show as installed. Open opens each one.
 - [ ] The status line reads "Checked for updates just now"; after 10 minutes and bringing the window back, "10 minutes ago".
@@ -80,6 +80,7 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 - [ ] PrismStatistics (`/P`)
 - [ ] Prism Reference Manager (`/P`)
 - [ ] Prism Transcribe (`/P`): its progress bar shows, no pages; Windows lists "Prism Transcribe" 0.1.0, and Open starts `prism-transcribe.exe`. The program file name is read from its build files (its Cargo binary is `prism-transcribe`); no installed copy was on this PC to compare.
+- [ ] Prism Survey (`/P`): its progress bar shows, no pages; Windows lists "Prism Survey" 0.1.0, and Open starts `prismsurvey-app.exe` (read from its build files, as for Transcribe). Its release was published as `v0.1.0-preview.2`, a version the hub does not read; on 2026-11-18 Claude added the tag `v0.1.0-beta.1` at the same commit (6954716) and moved the release to it, marked pre-release, with the same signed setup. Later Survey releases need alpha, beta or rc in the tag.
 - [ ] Uninstall says the app's documents and projects stay; afterwards they are still there and the app is gone from Windows' list.
 - [ ] Update with the app open: the row says "Close ... to continue"; closing it lets the update go on. The hub never closes it.
 - [ ] Update all with two or more updates and one app open: the closed apps update one after another, then the open one waits with "Close ... to continue". The notice reads "Updating 1 of 3: ..." throughout, and the status line ends with "All 3 apps updated."

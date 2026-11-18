@@ -60,6 +60,18 @@
       "quietSwitch": ["/P"],
       "expectedSigner": "Jason Wrench",
       "setupPattern": "^Prism-Transcribe_.*_x64-setup\\.exe$"
+    },
+    {
+      "id": "prismsurvey",
+      "name": "Prism Survey",
+      "mark": { "letters": "ps", "color": "#285BFC", "icon": "icons/prismsurvey.svg" },
+      "description": "Scales from published measures, ready for Word questionnaires",
+      "repository": "jasonswrench-beep/prism_survey",
+      "installedAs": "Prism Survey",
+      "programFile": "prismsurvey-app.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^Prism[-. _]Survey_.*_x64-setup\\.exe$"
     }
   ],
   "web": [],
