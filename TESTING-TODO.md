@@ -33,6 +33,7 @@ Done for both hubs by 2026-11-15: the hub keys made, both repositories public, b
 
 - [ ] Each app's quiet install switch: below, under "Installing, updating, removing".
 - [x] 2026-11-17: the OpenStage catalog is republished (generated 2026-11-17 02:28 UTC). Claude downloaded it from GitHub: its signature checks against the key in `brands/openstage/brand.json`, and it offers OpenStage Author 0.1.0 alpha 5, Recorder 0.1.0 alpha 5, OpenAssess 0.1.0 alpha 29, OpenExplainer 0.2.0 alpha 5, Capture Express 0.1.0 alpha 5, Guide 0.1.0 alpha 10 and PDF Remediator 0.3.0 alpha 10, with the hub entry still 1.0.1. Every app's icon is inside the catalog, and the eight icon files for 1.0.1 hubs on the release match their SHA-256 in it. Prism's catalog was already current.
+- [x] 2026-11-18: republished (generated 2026-11-18 00:26 UTC) with OpenStage Studio and OpenStage Package Doctor under Desktop, no release, and Coming soon empty. Claude downloaded it from GitHub: its signature checks against the key in `brands/openstage/brand.json`, every app's version is as before, the eight icon files for 1.0.1 hubs match their SHA-256, and apart from its date it is the catalog the 1.0.0, 1.0.1 and current hub code were shown and accepted.
 - [ ] In an installed hub, Check for updates offers those versions for the apps you have, and every row still shows its icon.
 
 ## Web links and planned apps (list item 2)
