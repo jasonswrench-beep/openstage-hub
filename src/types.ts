@@ -20,7 +20,21 @@ export interface View {
   startWithWindows: boolean;
   policy: { checks: boolean; startWithWindows: boolean; previews: boolean };
   jobs: string[];
+  /** Update all or Install all while it runs. */
+  batch: Batch | null;
   repository: string;
+}
+
+export interface Batch {
+  kind: "update" | "install";
+  total: number;
+  done: number;
+  /** The name of the app (or the hub) being done now. */
+  current: string | null;
+  /** The ids of the apps still waiting their turn. */
+  queued: string[];
+  notDone: string[];
+  hubLast: boolean;
 }
 
 export interface AppView {

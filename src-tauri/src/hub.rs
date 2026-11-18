@@ -37,6 +37,8 @@ pub struct Hub {
     pub started_in_tray: bool,
     /// The hub was updated since it last ran: "Updated to 1.1.0" is shown once.
     pub just_updated: Mutex<Option<String>>,
+    /// Update all or Install all while it runs: the apps one after another (commands::start_all).
+    pub batch: Mutex<Option<BatchView>>,
 }
 
 impl Hub {
@@ -57,6 +59,7 @@ impl Hub {
             jobs: Mutex::new(HashMap::new()),
             started_in_tray,
             just_updated: Mutex::new(just_updated),
+            batch: Mutex::new(None),
         }
     }
 
@@ -143,9 +146,49 @@ impl Hub {
                 previews: previews_allowed,
             },
             jobs,
+            batch: self.batch.lock().unwrap().clone(),
             repository: brand().repository_url(),
         }
     }
+}
+
+/// Update all or Install all, while it runs.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchView {
+    /// "update" or "install".
+    pub kind: String,
+    /// How many steps in all (the hub's own update, when it comes last, is one).
+    pub total: usize,
+    /// How many are finished, whether or not they worked.
+    pub done: usize,
+    /// The name of the app (or the hub) being worked on now.
+    pub current: Option<String>,
+    /// Its id, for Stop (not sent to the window).
+    #[serde(skip)]
+    pub current_id: Option<String>,
+    /// The apps still waiting their turn, by id.
+    pub queued: Vec<String>,
+    /// The names of the apps that were not updated or installed (each row says why).
+    pub not_done: Vec<String>,
+    /// The hub updates itself after the apps.
+    pub hub_last: bool,
+}
+
+/// Which apps Update all ("update") or Install all ("install") works through, and in what order: as listed, but the apps open now go last,
+/// so the person can keep working in them while the others are done (each then waits for its app to close; the hub never closes it).
+pub fn batch_order(apps: &[AppView], kind: &str) -> Vec<String> {
+    let wanted = |a: &&AppView| {
+        a.offer.is_some()
+            && !a.needs_newer_hub
+            && match kind {
+                "update" => a.installed.is_some() && a.update,
+                "install" => a.installed.is_none() && !a.preview_blocked,
+                _ => false,
+            }
+    };
+    let (open, closed): (Vec<&AppView>, Vec<&AppView>) = apps.iter().filter(wanted).partition(|a| a.running);
+    closed.into_iter().chain(open).map(|a| a.id.clone()).collect()
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -168,6 +211,7 @@ pub struct View {
     pub start_with_windows: bool,
     pub policy: PolicyView,
     pub jobs: Vec<String>,
+    pub batch: Option<BatchView>,
     pub repository: String,
 }
 
@@ -414,6 +458,32 @@ mod tests {
         let v = app_view(&a, &[entry("App x", "0.2.0")], &saved, true);
         assert_eq!(v.offer.unwrap().version, "0.1.1");
         assert!(!v.update, "0.1.1 is older than the installed alpha, so nothing is offered until a stable release passes it");
+    }
+
+    #[test]
+    fn update_all_takes_the_apps_with_updates_and_leaves_open_ones_to_last() {
+        let a = app("a", None, Some("0.2.0-alpha.5"));
+        let b = app("b", None, Some("0.2.0-alpha.5"));
+        let c = app("c", None, Some("0.2.0-alpha.5"));
+        let d = app("d", None, Some("0.2.0-alpha.5"));
+        let old = [entry("App a", "0.1.0"), entry("App b", "0.1.0"), entry("App c", "0.2.0")];
+        let mut views: Vec<AppView> = [&a, &b, &c, &d].iter().map(|x| app_view(x, &old, &Saved::default(), true)).collect();
+        views[0].running = true;
+        // a and b have updates (a is open, so it goes last); c is current; d is not installed.
+        assert_eq!(batch_order(&views, "update"), ["b", "a"]);
+        assert_eq!(batch_order(&views, "install"), ["d"]);
+        assert!(batch_order(&views, "something else").is_empty());
+        views[1].needs_newer_hub = true;
+        assert_eq!(batch_order(&views, "update"), ["a"], "an app that needs a newer hub is left out");
+    }
+
+    #[test]
+    fn install_all_leaves_out_apps_with_nothing_to_install() {
+        let none = app_view(&app("x", None, Some("0.1.0-alpha.5")), &[], &Saved::default(), false);
+        assert!(none.preview_blocked);
+        let mut unreleased = app_view(&app("y", None, Some("0.1.0")), &[], &Saved::default(), true);
+        unreleased.offer = None;
+        assert!(batch_order(&[none, unreleased], "install").is_empty());
     }
 
     #[test]

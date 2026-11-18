@@ -34,7 +34,8 @@ const view: View = {
   lastCheck: Math.floor(Date.now() / 1000) - 600,
   keyMissing: false,
   needsNewerHub: false,
-  hubUpdate: null,
+  // ?hub-update shows a newer hub in the catalog, to try Update all with the hub last.
+  hubUpdate: new URLSearchParams(location.search).has("hub-update") ? { version: "1.0.3", size: 3318544 } : null,
   justUpdated: null,
   apps: released.map((a, i) => ({
     id: a.id,
@@ -60,14 +61,16 @@ const view: View = {
   startWithWindows: false,
   policy: { checks: true, startWithWindows: true, previews: true },
   jobs: [],
+  batch: null,
   repository: `https://github.com/${brandApps.hub.repository}`,
 };
 view.updatesReady = view.apps.filter((x) => x.update).length;
 
 const cancelled = new Set<string>();
 
-/** A pretend install: Downloading with progress, Checking, Installing, then done (or a checksum problem for one app, to show one). */
-function pretend(id: string) {
+/** A pretend install: Downloading with progress, Checking, Installing, then done (or a checksum problem for one app, to show one).
+ *  `ended` is told whether it worked. */
+function pretend(id: string, ended: (worked: boolean) => void = () => {}) {
   const a = view.apps.find((x) => x.id === id)!;
   const total = a.offer!.size;
   let received = 0;
@@ -76,6 +79,7 @@ function pretend(id: string) {
     if (cancelled.delete(id)) {
       window.clearInterval(tick);
       send({ stage: "cancelled", message: "Cancelled." });
+      ended(false);
       return;
     }
     received = Math.min(total, received + total / 12);
@@ -84,7 +88,10 @@ function pretend(id: string) {
       window.clearInterval(tick);
       window.setTimeout(() => send({ stage: "checking", message: "Checking" }), 400);
       window.setTimeout(() => {
-        if (id === failing) return send({ stage: "failed", message: "The download did not match its checksum, so nothing was installed." });
+        if (id === failing) {
+          send({ stage: "failed", message: "The download did not match its checksum, so nothing was installed." });
+          return ended(false);
+        }
         send({ stage: "installing", message: "Installing" });
         window.setTimeout(() => {
           a.installed = { version: a.offer!.version, exact: true, folderKnown: true };
@@ -93,10 +100,63 @@ function pretend(id: string) {
           view.updatesReady = view.apps.filter((x) => x.update).length;
           send({ stage: "done", message: `${a.name} is installed.` });
           emit("view", view);
+          ended(true);
         }, 1500);
       }, 1200);
     }
   }, 300);
+}
+
+/** A pretend Update all or Install all, the way commands.rs start_all does it: one after another, open apps last. */
+function pretendAll(kind: "update" | "install") {
+  const wanted = view.apps.filter((a) => a.offer && !a.needsNewerHub && (kind === "update" ? a.installed && a.update : !a.installed && !a.previewBlocked));
+  const order = [...wanted.filter((a) => !a.running), ...wanted.filter((a) => a.running)].map((a) => a.id);
+  const hubLast = kind === "update" && !!view.hubUpdate;
+  view.batch = { kind, total: order.length + (hubLast ? 1 : 0), done: 0, current: null, queued: [...order], notDone: [], hubLast };
+  emit("view", view);
+  let worked = 0;
+  const step = () => {
+    const b = view.batch!;
+    const id = b.queued.shift();
+    if (!id || cancelled.delete("all")) {
+      const what = kind === "update" ? "updated" : "installed";
+      const apps = order.length;
+      let words = id
+        ? `Stopped. ${worked} of ${apps} apps ${what}.`
+        : b.notDone.length
+          ? `${worked} of ${apps} apps ${what}. Not ${what}: ${b.notDone.join(", ")}. Each one's row says why.`
+          : apps === 2 ? `Both apps ${what}.` : `All ${apps} apps ${what}.`;
+      if (hubLast && !id && b.notDone.length === 0) {
+        // The hub's own update, last: in the real hub it closes here and the new hub starts.
+        b.current = "the hub";
+        emit("job", { id: "hub", stage: "downloading", received: 1659272, total: 3318544, message: "Downloading" });
+        emit("view", view);
+        window.setTimeout(() => emit("job", { id: "hub", stage: "installing", received: 0, total: 0, message: "Installing" }), 1500);
+        window.setTimeout(() => {
+          emit("job", { id: "hub", stage: "done", received: 0, total: 0, message: "Updating the hub. It restarts by itself." });
+          view.batch = null;
+          emit("view", view);
+        }, 3000);
+        return;
+      }
+      if (hubLast && !id) words += " The hub was not updated, so you can see what happened first. Its Update button is at the top.";
+      view.batch = null;
+      emit("batch-done", words);
+      emit("view", view);
+      return;
+    }
+    const a = view.apps.find((x) => x.id === id)!;
+    b.current = a.name;
+    emit("view", view);
+    pretend(id, (ok) => {
+      if (ok) worked++;
+      else b.notDone.push(a.name);
+      b.done++;
+      b.current = null;
+      step();
+    });
+  };
+  step();
 }
 
 (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {
@@ -125,8 +185,13 @@ function pretend(id: string) {
       case "start_job":
         pretend(args.id as string);
         return null;
+      case "start_all":
+        pretendAll(args.kind as "update" | "install");
+        return null;
       case "cancel_job":
         cancelled.add(args.id as string);
+        // Stop also cancels the app being done.
+        if (args.id === "all" && view.batch?.current) cancelled.add(view.apps.find((a) => a.name === view.batch!.current)!.id);
         return null;
       case "set_setting": {
         const name = args.name as string;

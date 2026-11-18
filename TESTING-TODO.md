@@ -22,6 +22,11 @@ On 2026-11-16, after the two hubs became one codebase (version 1.0.2, not releas
 - The window, built for each brand, shows that hub's name, icon and accent colour, and every app's own icon carried in the catalog (Prism Hub's three SVGs, OpenStage Hub's PNGs). Package Doctor and Rehearse show under Coming soon with their round marks. A pretend install that fails shows its sentence and Retry.
 - PrismQDA already takes its statistics from the shared core at the tag `prismqda-stats-v1.0.0` and has no copy of its own (nothing to change this round).
 
+On 2026-11-17, Update all and Install all (not released; comes with 1.0.2):
+
+- `npm test` (12 tests) and `npm run typecheck` pass; built as each hub, `cargo test` passes 24 tests (the order Update all takes, which apps Install all takes, and the sentence at the end).
+- In a browser with the stand-in, for both hubs: Update all does the closed app first and the open one last, the waiting rows say "waiting its turn", Stop leaves the rest offered, a failure does not stop the others, and the hub goes last when the catalog offers one. Install all asks first, "Not now" has the focus, and Escape returns it to the button. By keyboard alone; the focus moves to Stop, and to the Desktop heading when the notice goes. Light, dark, and half the window's width (200 percent) with nothing scrolling sideways.
+
 ## First release (list item 1)
 
 Done for both hubs by 2026-11-15: the hub keys made, both repositories public, both catalogs published, 1.0.0 and 1.0.1 released and signed. The footer links between the two hubs now open (both repositories are public). Still to do:
@@ -54,6 +59,7 @@ Done for both hubs by 2026-11-15: the hub keys made, both repositories public, b
 - [ ] Ctrl and plus zooms to 200 percent; everything still fits and works.
 - [ ] Windows' display scale at 200 percent: the window is sharp and fits.
 - [ ] NVDA: every button names its app ("Install OpenStage Guide", "Install Prism Reference Manager"); progress stages and failures are read; the menus and dialogs are read as menus and dialogs.
+- [ ] NVDA with Update all: the button reads "Update all 3 apps, then the hub"; each app's stages are read as it goes; the closing sentence is read.
 - [ ] Windows' contrast themes and dark mode: the text and buttons can still be seen (Prism Hub's navy buttons too).
 
 ## Installing, updating, removing (on a clean Windows account)
@@ -72,6 +78,10 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 - [ ] Prism Reference Manager (`/P`)
 - [ ] Uninstall says the app's documents and projects stay; afterwards they are still there and the app is gone from Windows' list.
 - [ ] Update with the app open: the row says "Close ... to continue"; closing it lets the update go on. The hub never closes it.
+- [ ] Update all with two or more updates and one app open: the closed apps update one after another, then the open one waits with "Close ... to continue". The notice reads "Updating 1 of 3: ..." throughout, and the status line ends with "All 3 apps updated."
+- [ ] Update all with a newer hub in the catalog (after 1.0.3 exists): the apps first, then the hub closes, updates and restarts.
+- [ ] Install all on a clean account: it asks first (naming the apps and the download size), then installs them one after another. Stop part way: the app being downloaded is cancelled and the rest are left.
+- [ ] Close the window to the tray during Update all: it carries on; reopening the window shows how far it has got.
 - [ ] Cancel while downloading: nothing is installed and the download folder (`%LOCALAPPDATA%\org.openstage.hub\downloads`, or `org.prismopenresearch.hub` for Prism Hub) is empty.
 - [ ] Unplug the network part way through a download: a plain sentence and Retry.
 - [ ] No step asks for administrator rights.

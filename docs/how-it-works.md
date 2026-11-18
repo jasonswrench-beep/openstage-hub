@@ -32,6 +32,14 @@ The hub reads one small signed file instead of asking GitHub about each app: the
 
 Cancel works while downloading, checking or waiting; not while the installer itself runs.
 
+### Update all and Install all
+
+When any installed app has an update, a notice at the top says how many ("3 updates available, including the hub") with one **Update all** button (just **Update**, naming the app, when there is one). When two or more apps are not installed yet, **Install all** sits beside the Desktop heading; it first asks, naming the apps and how much they download in all, with "Not now" first.
+
+Both do the apps one after another, never two installers at once, each with the six steps above and its own progress in its row (`commands::start_all`). Apps open at the time go last, so the others are done while the person keeps working; each then waits to be closed, as an update on its own does. The rows waiting their turn say so and have no button. The notice shows which step is running ("Updating 2 of 4: OpenAssess") and a **Stop** button, which cancels the app being done (unless its installer is already running) and the rest. An app that fails does not stop the others: its row says why with Retry, and the status line ends with a sentence naming what was not done.
+
+Update all updates the hub itself last, because that closes and restarts it, and only when every app worked; otherwise the hub's own Update button stays, so the person sees what went wrong first. The batch runs in the hub, not the window, so closing the window to the tray does not stop it.
+
 ### Which version is installed
 
 Windows' installed apps list shows only the three numbers of an OpenStage app (0.2.0, not 0.2.0 alpha 4). The hub records the exact release it installs, and trusts that record only while Windows still lists the same three numbers. For an app installed before the hub, or updated by the app's own Check for updates, the hub knows only the three numbers: it shows "0.2.0 installed" and offers Update only when a release with higher numbers appears (Reinstall in the menu installs the newest one now).
@@ -48,7 +56,7 @@ Uninstalling the hub removes the hub, its start-up entry, its cached catalog and
 
 ## The hub's own updates
 
-The catalog's `hub` entry names the hub's newest release. When it is newer, the window shows "A new version of the hub is ready" with an Update button. The hub runs steps 1 to 3 on its own installer, closes, the installer runs (showing its progress bar), and the new hub starts. After the restart it says "The hub was updated to ..." once.
+The catalog's `hub` entry names the hub's newest release. When it is newer and no app has an update, the window shows "A new version of the hub is ready" with an Update button; when apps have updates too, Update all does the hub last (above). The hub runs steps 1 to 3 on its own installer, closes, the installer runs (showing its progress bar), and the new hub starts. After the restart it says "The hub was updated to ..." once.
 
 ## The tray and Start with Windows
 

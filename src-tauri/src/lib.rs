@@ -86,6 +86,7 @@ pub fn run() {
             commands::get_view,
             commands::refresh,
             commands::start_job,
+            commands::start_all,
             commands::download_extra,
             commands::cancel_job,
             commands::uninstall,

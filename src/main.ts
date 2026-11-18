@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { brand, markUrl } from "virtual:brand";
 import type { AppView, JobEvent, View } from "./types";
-import { appRow, comingRow, statusLine, webRow, type RowState } from "./rows";
+import { appRow, comingRow, size, statusLine, webRow, type RowState } from "./rows";
 import { bindMenuButton, closeAllMenus } from "./menus";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -38,7 +38,18 @@ function announce(words: string, urgent = false) {
 // ---- Drawing ---------------------------------------------------------------------------------------------------------------------------
 
 function stateOf(app: AppView): RowState {
-  return { job: jobs.get(app.id) ?? null, problem: problems.get(app.id) ?? null, offline: isOffline() };
+  const queued = !!view?.batch?.queued.includes(app.id);
+  return { job: jobs.get(app.id) ?? null, problem: problems.get(app.id) ?? null, offline: isOffline(), queued };
+}
+
+/** The apps Update all does (installed, with a newer release), as the Rust side picks them (hub.rs batch_order). */
+function updatable(v: View): AppView[] {
+  return v.apps.filter((a) => a.installed && a.update && a.offer && !a.needsNewerHub);
+}
+
+/** The apps Install all does: every one not installed that has a release to install here. */
+function installable(v: View): AppView[] {
+  return v.apps.filter((a) => !a.installed && a.offer && !a.needsNewerHub && !a.previewBlocked);
 }
 
 function isOffline(): boolean {
@@ -53,6 +64,7 @@ function draw() {
 
   drawBanner(v);
   const hideApps = v.needsNewerHub;
+  drawInstallAll(v, hideApps);
   const desktop = $("desktop");
   const kept = new Map([...desktop.children].map((li) => [(li as HTMLElement).dataset.id, li as HTMLElement]));
   syncRows(desktop, hideApps ? [] : v.apps.map((a) => appRow(a, stateOf(a), actions, kept.get(a.id))));
@@ -66,8 +78,13 @@ function draw() {
   $("soon-section").hidden = hideApps || v.comingSoon.length === 0;
 
   $("status").textContent = notice ?? statusLine(v, Date.now());
-  // Drawing replaces the rows; put the focus back on the same control (ids are stable: main-<app>, more-<app>).
-  if (focusedId) document.getElementById(focusedId)?.focus();
+  // Drawing replaces the rows; put the focus back on the same control (ids are stable: main-<app>, more-<app>, banner-button). When that
+  // control has gone (Update all has finished, so its banner went), the focus goes to the Desktop heading, not to the top of the page.
+  if (focusedId) {
+    const again = document.getElementById(focusedId);
+    if (again && !again.closest("[hidden]")) again.focus();
+    else if (document.activeElement === document.body) $("desktop-heading").focus();
+  }
 }
 
 /** Puts `rows` in `list`, leaving each row that is already there untouched (so its focus and an open menu survive). */
@@ -89,11 +106,51 @@ function emptyText(v: View): string {
   return "No apps are listed.";
 }
 
+function bannerButton(words: string, label: string, onClick: (() => void) | null): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = "banner-button";
+  button.className = "primary";
+  button.textContent = words;
+  button.setAttribute("aria-label", label);
+  if (onClick) button.addEventListener("click", onClick);
+  else button.setAttribute("aria-disabled", "true");
+  return button;
+}
+
 function drawBanner(v: View) {
   const banner = $("banner");
   banner.replaceChildren();
   const text = document.createElement("p");
-  if (v.hubUpdate || v.needsNewerHub) {
+  const updates = updatable(v);
+  const hubJob = jobs.get("hub");
+  if (v.batch && !v.needsNewerHub) {
+    // Update all or Install all is running: which step, and Stop.
+    const b = v.batch;
+    const verb = b.kind === "update" ? "Updating" : "Installing";
+    const step = Math.min(b.done + 1, b.total);
+    text.textContent = hubJob
+      ? `Updating the hub, the last step. ${hubJob.message}${hubJob.total ? ` ${Math.floor((100 * hubJob.received) / hubJob.total)}%` : ""}`
+      : b.current
+        ? `${verb} ${step} of ${b.total}: ${b.current}`
+        : `${verb} ${b.total} one after another`;
+    banner.append(text);
+    // Once the hub's installer runs it cannot be cancelled (the same as an app's row).
+    if (hubJob) {
+      if (hubJob.stage !== "installing") banner.append(bannerButton("Cancel", "Cancel the hub's update", () => act("cancel_job", { id: "hub" })));
+    } else banner.append(bannerButton("Stop", b.kind === "update" ? "Stop updating all" : "Stop installing all", () => act("cancel_job", { id: "all" })));
+    banner.hidden = false;
+  } else if (updates.length > 0 && !v.needsNewerHub && !hubJob) {
+    // Updates available: one button for all of them, the hub last.
+    const n = updates.length + (v.hubUpdate ? 1 : 0);
+    text.textContent = `${n} updates available${v.hubUpdate ? ", including the hub" : ""}.`;
+    if (n === 1) text.textContent = `An update is available for ${updates[0].name}.`;
+    banner.append(text);
+    const label = `Update all ${updates.length} apps${v.hubUpdate ? ", then the hub" : ""}`;
+    const [words, name] = n === 1 ? ["Update", `Update ${updates[0].name}`] : ["Update all", label];
+    banner.append(isOffline() ? bannerButton("Offline", `${name}: offline`, null) : bannerButton(words, name, () => startAll("update")));
+    banner.hidden = false;
+  } else if (v.hubUpdate || v.needsNewerHub) {
     const job = jobs.get("hub");
     text.textContent = job
       ? `${job.message}${job.total ? ` ${Math.floor((100 * job.received) / job.total)}%` : ""}`
@@ -103,18 +160,17 @@ function drawBanner(v: View) {
           ? "The list of apps needs a newer hub. Update the hub to see the apps."
           : "A new version of the hub is ready.";
     banner.append(text);
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "primary";
     if (v.hubUpdate) {
-      button.textContent = job ? "Cancel" : "Update";
-      button.setAttribute("aria-label", job ? "Cancel the hub's update" : `Update ${brand.productName}`);
-      button.addEventListener("click", () => (job ? act("cancel_job", { id: "hub" }) : act("update_hub")));
+      if (job?.stage === "installing") {
+        // Its installer is running: nothing left to cancel.
+      } else banner.append(
+        job
+          ? bannerButton("Cancel", "Cancel the hub's update", () => act("cancel_job", { id: "hub" }))
+          : bannerButton("Update", `Update ${brand.productName}`, () => act("update_hub")),
+      );
     } else {
-      button.textContent = "Releases page";
-      button.addEventListener("click", () => act("open_link", { which: "releases" }));
+      banner.append(bannerButton("Releases page", "Releases page", () => act("open_link", { which: "releases" })));
     }
-    banner.append(button);
     banner.hidden = false;
   } else if (v.justUpdated) {
     text.textContent = `The hub was updated to ${v.justUpdated}.`;
@@ -125,8 +181,48 @@ function drawBanner(v: View) {
   }
 }
 
+/** Install all, beside the Desktop heading: shown when two or more apps can be installed (one has its own Install button). */
+function drawInstallAll(v: View, hideApps: boolean) {
+  const button = $<HTMLButtonElement>("install-all");
+  const apps = installable(v);
+  button.hidden = hideApps || !!v.batch || apps.length < 2;
+  if (button.hidden) return;
+  if (isOffline()) {
+    button.textContent = "Offline";
+    button.setAttribute("aria-disabled", "true");
+    button.setAttribute("aria-label", "Install all: offline");
+  } else {
+    button.textContent = "Install all";
+    button.removeAttribute("aria-disabled");
+    button.setAttribute("aria-label", `Install all ${apps.length} apps you do not have yet`);
+  }
+}
+
+$("install-all").addEventListener("click", () => {
+  if (!view || isOffline()) return;
+  const apps = installable(view);
+  if (apps.length === 0) return;
+  const bytes = apps.reduce((sum, a) => sum + (a.offer?.size ?? 0), 0);
+  ask(
+    `Install ${apps.length} apps?`,
+    `${apps.map((a) => a.name).join(", ")}. About ${size(bytes)} to download in all. They install one after another, each showing its own progress.`,
+    "Install all",
+    `Install all ${apps.length} apps`,
+    "Not now",
+    () => startAll("install"),
+  );
+});
+
 // ---- Acting ----------------------------------------------------------------------------------------------------------------------------
 
+function startAll(kind: "update" | "install") {
+  if (!view) return;
+  const n = kind === "update" ? updatable(view).length + (view.hubUpdate ? 1 : 0) : installable(view).length;
+  for (const a of kind === "update" ? updatable(view) : installable(view)) problems.delete(a.id);
+  notice = null;
+  announce(kind === "update" ? `Updating ${n}, one after another${view.hubUpdate ? ", the hub last" : ""}.` : `Installing ${n} apps, one after another.`);
+  void act("start_all", { kind });
+}
 async function act(command: string, args: Record<string, unknown> = {}) {
   try {
     const result = await invoke(command, args);
@@ -142,20 +238,33 @@ async function act(command: string, args: Record<string, unknown> = {}) {
   }
 }
 
-function confirmUninstall(app: AppView) {
+/** The yes-or-no dialog. The safe answer has the focus first; Escape is the same as it, and the focus goes back to what opened it. */
+function ask(title: string, words: string, yes: string, yesLabel: string, no: string, then: () => void) {
   const dialog = $<HTMLDialogElement>("confirm-dialog");
-  $("confirm-title").textContent = `Uninstall ${app.name}?`;
-  $("confirm-text").textContent = `This runs ${app.name}'s own uninstaller. Your documents and projects stay where they are.`;
-  $("confirm-yes").textContent = "Uninstall";
-  $("confirm-yes").setAttribute("aria-label", `Uninstall ${app.name}`);
+  $("confirm-title").textContent = title;
+  $("confirm-text").textContent = words;
+  $("confirm-yes").textContent = yes;
+  $("confirm-yes").setAttribute("aria-label", yesLabel);
+  $("confirm-no").textContent = no;
   const opener = document.activeElement as HTMLElement | null;
   dialog.returnValue = "";
   dialog.onclose = () => {
     opener?.focus();
-    if (dialog.returnValue === "yes") start(app.id, "uninstall");
+    if (dialog.returnValue === "yes") then();
   };
   dialog.showModal();
   $("confirm-no").focus();
+}
+
+function confirmUninstall(app: AppView) {
+  ask(
+    `Uninstall ${app.name}?`,
+    `This runs ${app.name}'s own uninstaller. Your documents and projects stay where they are.`,
+    "Uninstall",
+    `Uninstall ${app.name}`,
+    "Keep it",
+    () => start(app.id, "uninstall"),
+  );
 }
 
 function start(id: string, command: "start_job" | "uninstall", extra: Record<string, unknown> = {}) {
@@ -308,6 +417,14 @@ void listen<JobEvent>("job", (e) => {
     // Each new stage is announced once (not every percent).
     if (before?.stage !== job.stage) announce(job.stage === "waiting" ? job.message : `${SPOKEN[job.stage] ?? job.stage} ${name}`);
   }
+  draw();
+});
+
+// Update all or Install all has ended: one sentence on how it went (each row that did not work says why).
+void listen<string>("batch-done", (e) => {
+  if (!e.payload) return;
+  notice = e.payload;
+  announce(e.payload);
   draw();
 });
 

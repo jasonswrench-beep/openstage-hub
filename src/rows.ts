@@ -8,6 +8,8 @@ export interface RowState {
   job: JobEvent | null;
   problem: string | null;
   offline: boolean;
+  /** Waiting its turn in Update all or Install all. */
+  queued: boolean;
 }
 
 export interface RowActions {
@@ -103,7 +105,7 @@ function progressWords(job: JobEvent): string {
 
 /** A row's identity for redrawing: when it is unchanged apart from download progress, the row is kept and only its bar moves. */
 function signature(a: AppView, s: RowState): string {
-  return JSON.stringify([a, s.problem, s.offline, s.job ? s.job.stage : null]);
+  return JSON.stringify([a, s.problem, s.offline, s.queued, s.job ? s.job.stage : null]);
 }
 
 /** Moves a kept row's progress bar and words without redrawing it (so an open menu stays open). */
@@ -148,6 +150,9 @@ export function appRow(a: AppView, s: RowState, act: RowActions, keep?: HTMLElem
     if (s.job.stage === "downloading" && s.job.total > 0) bar.value = s.job.received / s.job.total;
     else bar.removeAttribute("value");
     info.append(bar);
+  } else if (s.queued) {
+    // No button: the batch does it next, and the hub never runs two installers at once.
+    detail.textContent = installed ? `${installedText}, waiting its turn to update` : "Waiting its turn to install";
   } else if (s.problem) {
     main.textContent = "Retry";
     main.setAttribute("aria-label", `Retry ${a.name}`);
