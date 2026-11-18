@@ -48,6 +48,18 @@
         { "name": "Portable copy", "description": "Runs without installing", "pattern": "^Prism-Reference-Manager-.*-portable\\.zip$" },
         { "name": "Browser add-on", "description": "Saves pages and PDFs from your browser into the library", "pattern": "^Prism-Reference-Manager-.*-browser-capture\\.zip$" }
       ]
+    },
+    {
+      "id": "prism-transcribe",
+      "name": "Prism Transcribe",
+      "mark": { "letters": "tr", "color": "#7A2FD0", "icon": "icons/prism-transcribe.svg" },
+      "description": "Transcripts of interviews and focus groups",
+      "repository": "jasonswrench-beep/prism_transcription",
+      "installedAs": "Prism Transcribe",
+      "programFile": "prism-transcribe.exe",
+      "quietSwitch": ["/P"],
+      "expectedSigner": "Jason Wrench",
+      "setupPattern": "^Prism-Transcribe_.*_x64-setup\\.exe$"
     }
   ],
   "web": [],

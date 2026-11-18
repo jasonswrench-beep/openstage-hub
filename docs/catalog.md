@@ -48,7 +48,7 @@ At the top of the file, `alsoPublishIconFiles` (OpenStage only, for now) also pu
 
 | Apps | Installer | Switch | Tried |
 | --- | --- | --- | --- |
-| Author, Recorder, Assess, Explainer, Guide; PrismQDA, PrismStatistics, Prism Reference Manager | The suite's standard per-user installer (Tauri's NSIS) | `/P`: no questions, its progress bar shown | Not yet (TESTING-TODO.md) |
+| Author, Recorder, Assess, Explainer, Guide; PrismQDA, PrismStatistics, Prism Reference Manager, Prism Transcribe | The suite's standard per-user installer (Tauri's NSIS) | `/P`: no questions, its progress bar shown | Not yet (TESTING-TODO.md) |
 | PDF Remediator | Its own NSIS script, following Tauri's switches | `/S`: silent, no progress bar (it has no `/P`) | Not yet |
 | Capture Express | Inno Setup | `/SILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER` | Not yet |
 

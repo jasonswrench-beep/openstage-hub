@@ -1,9 +1,10 @@
 {
-  "_about": "For tests/catalog-lib.test.mjs only: setup file names each app's releases have used (as GitHub showed them on 2026-11-15), which its setupPattern in apps.json must match, and files that must not match.",
+  "_about": "For tests/catalog-lib.test.mjs only: setup file names each app's releases have used (as GitHub showed them on 2026-11-15; Prism Transcribe on 2026-11-18), which its setupPattern in apps.json must match, and files that must not match.",
   "setups": {
     "prismqda": ["PrismQDA_0.1.0-beta.1_x64-setup.exe"],
     "prismstatistics": ["PrismStatistics_0.1.0_x64-setup.exe"],
-    "prism-reference-manager": ["Prism-Reference-Manager-0.1.2-setup.exe", "Prism-Reference-Manager-0.1.0-setup.exe"]
+    "prism-reference-manager": ["Prism-Reference-Manager-0.1.2-setup.exe", "Prism-Reference-Manager-0.1.0-setup.exe"],
+    "prism-transcribe": ["Prism-Transcribe_0.1.0-alpha.1_x64-setup.exe"]
   },
-  "notSetups": ["PrismQDA_0.1.0-beta.1_portable.zip", "Prism-Reference-Manager-0.1.2-portable.zip", "Prism-Reference-Manager-0.1.2-browser-capture.zip"]
+  "notSetups": ["PrismQDA_0.1.0-beta.1_portable.zip", "Prism-Reference-Manager-0.1.2-portable.zip", "Prism-Reference-Manager-0.1.2-browser-capture.zip", "Prism-Transcribe_0.1.0-alpha.1_x64-setup.exe.sha256.txt"]
 }
