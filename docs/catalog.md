@@ -35,6 +35,7 @@ It needs Node.js and the GitHub command line (`gh`), signed in as the owner. Che
 | `ignoreTags` | Releases never to list (for example, ones published before code signing began) |
 | `extras` | Other downloads: `name`, `description` and a `pattern` matching the file |
 | `windowsVersion` | Only if Windows lists something other than the release's three numbers |
+| `windowsListsFullVersion` | For an app whose installer is built with the pre-release part in its version (PrismQDA, Prism Transcribe): Windows lists the whole version (`0.1.0-alpha.1`), so the catalog expects that for every release |
 | `minimumHubVersion` | Only if this entry needs a newer hub |
 | `listedBeforeRelease` | For an app about to come out (OpenStage Studio and OpenStage Package Doctor, Jason's choice on 2026-11-17): a Desktop row now, reading "No release yet" with no Install button and no What's new, until its repository is public and has a published release; from then on its release is listed and Install appears, with no change to this file |
 | `comingSoonUntilReleased` | For an app still being made: listed under Coming soon, with its mark, until its repository is public and has a published release; from then on it is a Desktop row like the others, with no change to this file |

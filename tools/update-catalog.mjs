@@ -23,7 +23,7 @@ import { join, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { appEntry, changes, checkSignature, downloadUrl, findAsset, markOf, pickReleases, previewMismatch, publicOf, releaseEntry, signBytes, stamp, table } from "./catalog-lib.mjs";
+import { appEntry, changes, checkSignature, downloadUrl, findAsset, markOf, pickReleases, previewMismatch, publicOf, releaseEntry, signBytes, stamp, table, windowsVersionFor } from "./catalog-lib.mjs";
 import { keyFile } from "./make-hub-key.mjs";
 import { askSecret } from "./prompt.mjs";
 import { loadBrand, root } from "./brand.mjs";
@@ -190,7 +190,7 @@ async function buildCatalog(memory) {
       }
       const url = downloadUrl(source.repository, release.tag_name, found.asset.name);
       const sum = await checked(found.asset, url, source.expectedSigner, `${source.name} ${release.tag_name}`, memory);
-      return sum && releaseEntry(source.repository, release, found.asset, sum, source.windowsVersion);
+      return sum && releaseEntry(source.repository, release, found.asset, sum, windowsVersionFor(source, release.tag_name));
     };
     const stableEntry = await entry(stable);
     const previewEntry = await entry(preview);

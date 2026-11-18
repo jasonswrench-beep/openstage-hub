@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   appEntry, baseVersion, changes, checkSignature, compareVersions, downloadUrl, findAsset, makeKey, markOf, MOST_ICON_BYTES, pickReleases, previewMismatch, publicOf, releaseEntry, signBytes, stamp,
+  windowsVersionFor,
 } from "../tools/catalog-lib.mjs";
 import { brandIds, loadBrand, root } from "../tools/brand.mjs";
 import { branded } from "../tools/apply-brand.mjs";
@@ -68,6 +69,11 @@ test("a release entry points at github.com and keeps Windows' version", () => {
   assert.equal(e.version, "0.2.0-alpha.4");
   assert.equal(downloadUrl("o/r", "v1", "A B.exe"), "https://github.com/o/r/releases/download/v1/A%20B.exe");
   assert.equal(stamp(new Date("2026-11-15T18:04:00.123Z")), "2026-11-15T18:04:00Z");
+  // What Windows lists after the install: the three numbers, the whole version (Prism Transcribe's installer), or a fixed value.
+  assert.equal(windowsVersionFor({}, "v0.1.0-alpha.1"), "0.1.0");
+  assert.equal(windowsVersionFor({ windowsListsFullVersion: true }, "v0.1.0-alpha.1"), "0.1.0-alpha.1");
+  assert.equal(windowsVersionFor({ windowsListsFullVersion: true }, "v0.2.0"), "0.2.0");
+  assert.equal(windowsVersionFor({ windowsVersion: "1.2.3.4" }, "v1.2.3"), "1.2.3.4");
 });
 
 test("the change table marks what changed", () => {
@@ -78,6 +84,10 @@ test("the change table marks what changed", () => {
   assert.ok(rows.find((r) => r.name === "X (preview)").changed);
   assert.ok(!rows.find((r) => r.name === "X (stable)").changed);
   assert.ok(!changes(after, after).some((r) => r.changed));
+  // The same release with only the version Windows lists corrected (Prism Transcribe, 2026-11-18) is a change too.
+  const fixed = { ...after, apps: [{ ...after.apps[0], preview: { ...after.apps[0].preview, windowsVersion: "0.1.0-alpha.2" } }] };
+  assert.ok(changes(after, fixed).find((r) => r.name === "X (other details)")?.changed);
+  assert.ok(!changes(fixed, fixed).some((r) => r.changed));
 });
 
 test("a catalog signed with the hub key checks out, and one changed byte does not", () => {

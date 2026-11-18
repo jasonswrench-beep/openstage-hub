@@ -78,10 +78,10 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 - [ ] OpenStage Guide (`/P`)
 - [ ] PDF Remediator (`/S`): installs with no window at all (its installer has no progress-bar-only mode). Say if you would rather it showed its pages.
 - [ ] OpenStage Capture Express (`/SILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER`): its progress window shows, no questions.
-- [ ] PrismQDA (`/P`): its progress bar shows, no pages; Windows lists 0.1.0.
+- [ ] PrismQDA (`/P`): its progress bar shows, no pages; Windows lists 0.1.0-beta.3 (its installer is built with the whole version, like Transcribe's; the catalog now expects that). If Windows lists 0.1.0 instead, the hub says so after the install: tell Claude, and `windowsListsFullVersion` comes off PrismQDA in `brands/prism/apps.json`.
 - [ ] PrismStatistics (`/P`)
 - [ ] Prism Reference Manager (`/P`)
-- [ ] Prism Transcribe (`/P`): its progress bar shows, no pages; Windows lists "Prism Transcribe" 0.1.0, and Open starts `prism-transcribe.exe`. The program file name is read from its build files (its Cargo binary is `prism-transcribe`); no installed copy was on this PC to compare.
+- [ ] Prism Transcribe (`/P`): its progress bar shows, no pages, and Open starts `prism-transcribe.exe`. 2026-11-18, first try: it installed (into `AppData\Local\Prism Transcribe`, with `prism-transcribe.exe`), but the hub said "Windows lists Prism Transcribe as version 0.1.0-alpha.1, not 0.1.0": its installer is built with the whole version. The catalog now expects 0.1.0-alpha.1 (`windowsListsFullVersion`). After the catalog is republished, Check for updates: its row shows installed 0.1.0-alpha.1 with no update offered, and Reinstall from its menu ends without that message.
 - [ ] Prism Survey (`/P`): its progress bar shows, no pages; Windows lists "Prism Survey" 0.1.0, and Open starts `prismsurvey-app.exe` (read from its build files, as for Transcribe). Its release was published as `v0.1.0-preview.2`, a version the hub does not read; on 2026-11-18 Claude added the tag `v0.1.0-beta.1` at the same commit (6954716) and moved the release to it, marked pre-release, with the same signed setup. Later Survey releases need alpha, beta or rc in the tag.
 - [ ] Uninstall says the app's documents and projects stay; afterwards they are still there and the app is gone from Windows' list.
 - [ ] Update with the app open: the row says "Close ... to continue"; closing it lets the update go on. The hub never closes it.

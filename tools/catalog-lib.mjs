@@ -62,6 +62,15 @@ export function downloadUrl(repository, tag, name) {
   return `https://github.com/${repository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`;
 }
 
+/**
+ * The version Windows lists once a release is installed: the release's three numbers (most installers), its whole version when the app's
+ * entry sets windowsListsFullVersion (an installer built with the pre-release part in its own version), or a fixed windowsVersion.
+ */
+export function windowsVersionFor(source, tag) {
+  if (source.windowsListsFullVersion) return plainVersion(tag);
+  return source.windowsVersion ?? baseVersion(tag);
+}
+
 /** A catalog release entry from a GitHub release and its checked setup file. */
 export function releaseEntry(repository, release, asset, sha256, windowsVersion) {
   return {
@@ -133,6 +142,11 @@ export function changes(before, after) {
       const a = app[channel] ?? null;
       const changed = say(b) !== say(a) || b?.sha256 !== a?.sha256;
       rows.push({ name: `${app.name} (${channel})`, before: say(b), now: say(a), changed });
+    }
+    // Anything else in the entry (the version Windows lists, the program file, the switches, the extras) changing is worth publishing too.
+    const rest = (e) => JSON.stringify({ ...e, mark: undefined });
+    if (was && rest(was) !== rest(app) && !rows.slice(-2).some((r) => r.changed)) {
+      rows.push({ name: `${app.name} (other details)`, before: "as published", now: "changed", changed: true });
     }
     old.delete(app.id);
   }
