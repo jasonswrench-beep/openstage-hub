@@ -38,7 +38,7 @@ Done for both hubs by 2026-11-15: the hub keys made, both repositories public, b
 ## Web links and planned apps (list item 2)
 
 - [ ] OpenStage Scroll and Tutorial videos stay hidden until they have addresses. Scroll's will be its address on your server once it is deployed (Scroll's list item 1). Tell Claude each address, or put it in `url` under `web` in `brands/openstage/apps.json`.
-- [ ] OpenStage Package Doctor and OpenStage Rehearse are listed under Coming soon by the catalog script once their repositories exist, named `jasonswrench-beep/openstage-package-doctor` and `jasonswrench-beep/openstage-rehearse` (your choice, 2026-11-16). Nothing to do until then; if a repository gets a different name, change `repository` in `brands/openstage/apps.json`.
+- [ ] OpenStage Studio and OpenStage Package Doctor are listed under Desktop now, reading "No release yet" with no Install button (your choice, 2026-11-17: `listedBeforeRelease` in `brands/openstage/apps.json`). When each repository is public with a signed release, the next Update OpenStage Catalog run lists it and Install appears by itself. OpenStage Rehearse stays out of the catalog until `jasonswrench-beep/openstage-rehearse` exists, then shows under Coming soon. If a repository gets a different name, change `repository` there.
 - [ ] When each of them makes its first release, check its program file name and quiet switch in `brands/openstage/apps.json` (they are what a Tauri app made like the others would have).
 - [ ] Check that openstageauthor.com shows what you want.
 
@@ -52,7 +52,7 @@ Done for both hubs by 2026-11-15: the hub keys made, both repositories public, b
 ## The window (installed hub, not the development copy), for each hub
 
 - [ ] It opens about 470 by 720 with the hub's own icon and name (the OpenStage Suite icon and "OpenStage Hub"; the PrismOpenResearch icon and "Prism Hub").
-- [ ] OpenStage Hub lists its seven apps, the Web links, and OpenStage Studio under Coming soon. Prism Hub lists its three apps. Every app shows its own icon.
+- [ ] OpenStage Hub lists its seven apps, then OpenStage Studio and OpenStage Package Doctor reading "No release yet", and the Web links. Prism Hub lists its three apps. Every app shows its own icon (Package Doctor has its round mark until it has an icon).
 - [ ] First run asks about Start with Windows once, with "Not now" first. It does not ask again.
 - [ ] Apps installed before the hub show as installed. Open opens each one.
 - [ ] The status line reads "Checked for updates just now"; after 10 minutes and bringing the window back, "10 minutes ago".

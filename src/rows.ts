@@ -222,7 +222,8 @@ function moreMenu(a: AppView, s: RowState, act: RowActions): HTMLElement[] {
   const entries: [string, string, boolean][] = [];
   const installed = !!a.installed;
   if (installed) entries.push(["open", `Open`, a.installed!.folderKnown]);
-  entries.push(["whatsNew", "What's new", true]);
+  // An app listed before its first release has no page to show yet (its repository may still be private).
+  if (installed || a.offer) entries.push(["whatsNew", "What's new", true]);
   if (installed) entries.push(["folder", "Open install folder", a.installed!.folderKnown]);
   if (installed && a.offer && !a.needsNewerHub) {
     const exactSame = a.installed!.exact && a.installed!.version === a.offer.version;
@@ -231,6 +232,7 @@ function moreMenu(a: AppView, s: RowState, act: RowActions): HTMLElement[] {
   }
   if (installed) entries.push(["uninstall", "Uninstall", !busy]);
   for (const x of a.extras) entries.push([`extra:${x.index}`, `Download ${x.name} (${size(x.size)})`, !busy && !s.offline]);
+  if (entries.length === 0) return [];
 
   for (const [action, label, enabled] of entries) {
     const li = el("li");

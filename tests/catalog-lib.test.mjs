@@ -128,7 +128,10 @@ test("every brand has what the build and the hub need, and no brand value of one
     }
     assert.equal(apps.hub.repository, brand.repository, `${id}: the hub's releases are in its own repository`);
     for (const app of apps.apps.filter((a) => a.hiddenUntilRepositoryExists)) {
-      assert.ok(app.comingSoonUntilReleased, `${id}/${app.id}: a planned app is listed under Coming soon once its repository exists, until it is released`);
+      assert.ok(app.comingSoonUntilReleased || app.listedBeforeRelease, `${id}/${app.id}: a planned app is listed once its repository exists, until it is released`);
+    }
+    for (const app of apps.apps) {
+      assert.ok(!(app.comingSoonUntilReleased && app.listedBeforeRelease), `${id}/${app.id}: Coming soon or Desktop before release, not both`);
     }
     assert.equal(Buffer.from(brand.catalogPublicKey, "base64").length, 32, `${id}: the hub key's public half`);
   }

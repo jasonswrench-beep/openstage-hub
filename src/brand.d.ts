@@ -23,6 +23,7 @@ declare module "virtual:brand-apps" {
       mark: { letters: string; color: string; icon?: string };
       extras?: { name: string; description?: string }[];
       comingSoonUntilReleased?: boolean;
+      listedBeforeRelease?: boolean;
       hiddenUntilRepositoryExists?: boolean;
     }[];
     web: { id: string; name: string; description: string; url: string }[];

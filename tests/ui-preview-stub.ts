@@ -47,7 +47,8 @@ const view: View = {
     description: a.description ?? "",
     installed: null, offer: null, update: false, running: false, needsNewerHub: false, previewBlocked: false,
     extras: (a.extras ?? []).map((x, index) => ({ index, name: x.name, description: x.description ?? "", size: 5151595 })),
-    ...states[i % states.length],
+    // An app listed before its release has none: its row reads "No release yet".
+    ...(a.listedBeforeRelease ? {} : states[i % states.length]),
   })),
   // As in the real catalog, a link with no address yet is left out.
   web: brandApps.web.filter((w) => w.url),

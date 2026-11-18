@@ -109,8 +109,8 @@
       "quietSwitch": ["/P"],
       "expectedSigner": "Jason Wrench",
       "setupPattern": "^OpenStage[-. _]Studio.*[Ss]etup\\.exe$",
-      "comingSoonUntilReleased": true,
-      "_comingSoonUntilReleased": "Listed under Coming soon until its repository is public and has a published, signed release; then the catalog script moves it to Desktop by itself."
+      "listedBeforeRelease": true,
+      "_listedBeforeRelease": "Listed under Desktop now (Jason's choice, 2026-11-17), its row reading No release yet with no Install button, until its repository is public with a published, signed release; from then on the catalog script lists that release and Install appears, with no change here."
     },
     {
       "id": "openstage-package-doctor",
@@ -123,9 +123,8 @@
       "quietSwitch": ["/P"],
       "expectedSigner": "Jason Wrench",
       "setupPattern": "^OpenStage[-. _]Package[-. _]Doctor.*[Ss]etup\\.exe$",
-      "hiddenUntilRepositoryExists": true,
-      "comingSoonUntilReleased": true,
-      "_hiddenUntilRepositoryExists": "Left out of the catalog until the repository exists (private is enough), then listed under Coming soon until it is public with a signed release. The program file and quiet switch are what a Tauri app made like the others would have; check them when its first release is made."
+      "listedBeforeRelease": true,
+      "_listedBeforeRelease": "As for OpenStage Studio. The program file and quiet switch are what a Tauri app made like the others would have; check them when its first release is made."
     },
     {
       "id": "openstage-rehearse",
@@ -140,7 +139,7 @@
       "setupPattern": "^OpenStage[-. _]Rehearse.*[Ss]etup\\.exe$",
       "hiddenUntilRepositoryExists": true,
       "comingSoonUntilReleased": true,
-      "_hiddenUntilRepositoryExists": "As for Package Doctor."
+      "_hiddenUntilRepositoryExists": "Left out of the catalog until the repository exists (private is enough), then listed under Coming soon until it is public with a signed release. The program file and quiet switch are what a Tauri app made like the others would have; check them when its first release is made."
     }
   ],
   "web": [

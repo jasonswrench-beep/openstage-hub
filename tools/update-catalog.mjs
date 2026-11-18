@@ -168,6 +168,18 @@ async function buildCatalog(memory) {
         continue;
       }
     }
+    // An app listed before its release (Jason's choice for apps about to come out) is a Desktop row with no release, reading "No release
+    // yet", until its repository is public and has one. A release in a private repository is not listed: hubs could not download it.
+    if (source.listedBeforeRelease) {
+      const visibility = gh(["repo", "view", source.repository, "--json", "visibility"]).visibility;
+      if ((!stable && !preview) || visibility !== "PUBLIC") {
+        say(`  Listed with no release yet (${visibility !== "PUBLIC" ? `its repository is ${visibility.toLowerCase()}` : "no published release yet"})`);
+        const built = appEntry({ ...source, mark: markFor(source.mark) }, null, null, []);
+        built.icon = iconFileEntry(source);
+        apps.push(built);
+        continue;
+      }
+    }
     if (!stable && !preview) problems.push(`${source.name} has no published release.`);
     const entry = async (release) => {
       if (!release) return null;

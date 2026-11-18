@@ -36,8 +36,9 @@ It needs Node.js and the GitHub command line (`gh`), signed in as the owner. Che
 | `extras` | Other downloads: `name`, `description` and a `pattern` matching the file |
 | `windowsVersion` | Only if Windows lists something other than the release's three numbers |
 | `minimumHubVersion` | Only if this entry needs a newer hub |
-| `comingSoonUntilReleased` | For an app still being made (OpenStage Studio): listed under Coming soon, with its mark, until its repository is public and has a published release; from then on it is a Desktop row like the others, with no change to this file |
-| `hiddenUntilRepositoryExists` | For a planned app whose repository has not been made yet (OpenStage Package Doctor, OpenStage Rehearse): left out of the catalog altogether until the repository exists (private is enough). Used with `comingSoonUntilReleased`, so it then shows under Coming soon until it is released |
+| `listedBeforeRelease` | For an app about to come out (OpenStage Studio and OpenStage Package Doctor, Jason's choice on 2026-11-17): a Desktop row now, reading "No release yet" with no Install button and no What's new, until its repository is public and has a published release; from then on its release is listed and Install appears, with no change to this file |
+| `comingSoonUntilReleased` | For an app still being made: listed under Coming soon, with its mark, until its repository is public and has a published release; from then on it is a Desktop row like the others, with no change to this file |
+| `hiddenUntilRepositoryExists` | For a planned app whose repository has not been made yet (OpenStage Rehearse): left out of the catalog altogether until the repository exists (private is enough). Used with `comingSoonUntilReleased`, so it then shows under Coming soon until it is released |
 
 At the top of the file, `alsoPublishIconFiles` (OpenStage only, for now) also publishes each PNG icon as a separate file beside the catalog, named in the app's `icon` entry, the way OpenStage Hub 1.0.1 reads icons; newer hubs ignore it.
 
