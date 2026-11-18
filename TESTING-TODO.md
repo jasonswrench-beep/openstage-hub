@@ -53,7 +53,7 @@ Done for both hubs by 2026-11-15: the hub keys made, both repositories public, b
 ## The window (installed hub, not the development copy), for each hub
 
 - [ ] It opens about 470 by 720 with the hub's own icon and name (the OpenStage Suite icon and "OpenStage Hub"; the PrismOpenResearch icon and "Prism Hub").
-- [ ] OpenStage Hub lists its seven apps, then OpenStage Studio and OpenStage Package Doctor reading "No release yet", and the Web links. Prism Hub lists its three apps. Every app shows its own icon (Package Doctor has its round mark until it has an icon).
+- [ ] OpenStage Hub lists its seven apps, then OpenStage Studio and OpenStage Package Doctor reading "No release yet", and the Web links. Prism Hub lists its three apps. Every app shows its own icon.
 - [ ] First run asks about Start with Windows once, with "Not now" first. It does not ask again.
 - [ ] Apps installed before the hub show as installed. Open opens each one.
 - [ ] The status line reads "Checked for updates just now"; after 10 minutes and bringing the window back, "10 minutes ago".

@@ -115,7 +115,7 @@
     {
       "id": "openstage-package-doctor",
       "name": "OpenStage Package Doctor",
-      "mark": { "letters": "pk", "color": "#4D7C0F" },
+      "mark": { "letters": "pk", "color": "#4D7C0F", "icon": "icons/openstage-package-doctor.png" },
       "description": "Opens and repairs a course package with no source file",
       "repository": "jasonswrench-beep/openstage-package-doctor",
       "installedAs": "OpenStage Package Doctor",
