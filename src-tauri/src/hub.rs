@@ -130,7 +130,7 @@ impl Hub {
             catalog_date: catalog.as_ref().map(|c| c.generated.clone()),
             fetch: self.fetch.lock().unwrap().clone(),
             last_check: saved.last_check,
-            key_missing: public_key().trim().is_empty(),
+            key_missing: public_keys().iter().all(|k| k.trim().is_empty()),
             needs_newer_hub,
             hub_update,
             just_updated: self.just_updated.lock().unwrap().clone(),
@@ -331,18 +331,22 @@ pub fn app_view(app: &App, installed: &[Installed], saved: &Saved, previews_allo
     }
 }
 
-/// The public half of the hub key. A development build can be given a test key in HUB_TEST_KEY; a release build cannot.
-pub fn public_key() -> String {
+/// The public halves of the keys whose catalogs this hub trusts: the hub key, and the owner's offline backup key when there is one. A
+/// development build can be given a test key in HUB_TEST_KEY instead; a release build cannot.
+pub fn public_keys() -> Vec<String> {
     #[cfg(debug_assertions)]
     if let Ok(k) = std::env::var("HUB_TEST_KEY") {
-        return k;
+        return vec![k];
     }
-    brand().catalog_public_key.clone()
+    let b = brand();
+    [&b.catalog_public_key, &b.catalog_backup_key].into_iter().map(|k| k.trim().to_string()).filter(|k| !k.is_empty()).collect()
 }
 
 fn check(bytes: &[u8], sig: &[u8]) -> Result<Catalog, String> {
-    catalog::verify_signature(&public_key(), bytes, &String::from_utf8_lossy(sig))?;
-    catalog::parse(bytes)
+    catalog::verify_any(&public_keys(), bytes, &String::from_utf8_lossy(sig))?;
+    let catalog = catalog::parse(bytes)?;
+    catalog::check_floor(&catalog, &brand().minimum_catalog_date)?;
+    Ok(catalog)
 }
 
 /// The last good catalog on disk, checked again (a file changed on disk is refused like one from the network).

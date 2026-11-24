@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // The parts of the catalog script that need no network: choosing releases, building the catalog, comparing it with the published one, and
 // signing and checking it with the hub key. tests/catalog-lib.test.mjs tries each.
-import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
+import { createCipheriv, createPrivateKey, createPublicKey, generateKeyPairSync, randomBytes, scryptSync, sign, verify } from "node:crypto";
 
 /** A version as it sorts, as in the hub (src-tauri/src/version.rs): [a, b, c, stage, n], stage 0 alpha, 1 beta, 2 rc, 3 final. Or null. */
 export function versionKey(text) {
@@ -175,13 +175,57 @@ export function table(rows) {
 
 // ---- The hub key -----------------------------------------------------------------------------------------------------------------------
 
+/** One value in DER: its tag, its length, its contents. */
+function der(tag, ...parts) {
+  const body = Buffer.concat(parts);
+  const size = body.length < 0x80 ? [body.length] : body.length < 0x100 ? [0x81, body.length] : [0x82, body.length >> 8, body.length & 0xff];
+  return Buffer.concat([Buffer.from([tag, ...size]), body]);
+}
+const derInteger = (n) => {
+  const hex = n.toString(16);
+  const bytes = Buffer.from(hex.length % 2 ? `0${hex}` : hex, "hex");
+  return der(0x02, bytes[0] & 0x80 ? Buffer.concat([Buffer.from([0]), bytes]) : bytes);
+};
+const oid = (hex) => der(0x06, Buffer.from(hex, "hex"));
+
+/** How much work each guess at the password costs: 16 MB and eight passes (the most OpenSSL opens without its own limit being raised). */
+const SCRYPT = { N: 16384, r: 8, p: 8 };
+
+/**
+ * A private key as a password-protected PEM file. The password is stretched with scrypt, which makes guessing it from a stolen file far slower
+ * than the 2048 rounds of PBKDF2 that Node uses by itself. The form is standard (PKCS#8, PBES2, scrypt, AES-256-CBC), so Node and OpenSSL open it.
+ */
+export function protectKey(privateKey, password) {
+  const salt = randomBytes(16);
+  const iv = randomBytes(16);
+  const key = scryptSync(password, salt, 32, { ...SCRYPT, maxmem: 64 * 1024 * 1024 });
+  const cipher = createCipheriv("aes-256-cbc", key, iv);
+  const secret = privateKey.export({ type: "pkcs8", format: "der" });
+  const body = Buffer.concat([cipher.update(secret), cipher.final()]);
+  const scrypt = der(0x30, oid("2b06010401da47040b"), der(0x30, der(0x04, salt), derInteger(SCRYPT.N), derInteger(SCRYPT.r), derInteger(SCRYPT.p), derInteger(32)));
+  const aes = der(0x30, oid("60864801650304012a"), der(0x04, iv));
+  const pbes2 = der(0x30, oid("2a864886f70d01050d"), der(0x30, scrypt, aes));
+  const file = der(0x30, pbes2, der(0x04, body));
+  secret.fill(0);
+  return `-----BEGIN ENCRYPTED PRIVATE KEY-----\n${file.toString("base64").match(/.{1,64}/g).join("\n")}\n-----END ENCRYPTED PRIVATE KEY-----\n`;
+}
+
+/** The same key protected again, with scrypt and (if given) a new password. Throws when the old password does not open it. */
+export function rewrapKey(privatePem, password, newPassword = password) {
+  return protectKey(createPrivateKey({ key: privatePem, passphrase: password }), newPassword);
+}
+
+/** Whether a key file's password is stretched with scrypt (looking only at the file's own header, not at the key). */
+export const usesScrypt = (privatePem) => {
+  const base64 = privatePem.replace(/-----[^-]+-----|\s/g, "");
+  return Buffer.from(base64, "base64").includes(Buffer.from("2b06010401da47040b", "hex"));
+};
+
 /** A new Ed25519 key pair: the private half as a password-protected PEM, and the public half as the 32 raw bytes in base64 (for brand.json). */
 export function makeKey(password) {
-  const { privateKey, publicKey } = generateKeyPairSync("ed25519", {
-    privateKeyEncoding: { type: "pkcs8", format: "pem", cipher: "aes-256-cbc", passphrase: password },
-    publicKeyEncoding: { type: "spki", format: "der" },
-  });
-  return { privatePem: privateKey, publicB64: publicKey.subarray(publicKey.length - 32).toString("base64") };
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const spki = publicKey.export({ type: "spki", format: "der" });
+  return { privatePem: protectKey(privateKey, password), publicB64: spki.subarray(spki.length - 32).toString("base64") };
 }
 
 /** The public half (base64 of the 32 raw bytes) of a private key, so the script can check it is the key built into the hub. */

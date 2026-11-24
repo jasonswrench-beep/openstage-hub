@@ -24,6 +24,7 @@ import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { appEntry, changes, checkSignature, downloadUrl, findAsset, markOf, pickReleases, previewMismatch, publicOf, releaseEntry, signBytes, stamp, table, windowsVersionFor } from "./catalog-lib.mjs";
+import { trustedKeys } from "./catalog-floor.mjs";
 import { keyFile } from "./make-hub-key.mjs";
 import { askSecret } from "./prompt.mjs";
 import { loadBrand, root } from "./brand.mjs";
@@ -144,6 +145,11 @@ function repositoryExists(repository) {
 }
 
 async function buildCatalog(memory) {
+  // Hubs refuse a catalog that names another owner or another signer (brand.json has the only ones they accept), so such a catalog is never made.
+  for (const source of sources.apps) {
+    if (source.repository.split("/")[0].toLowerCase() !== brand.allowedOwner.toLowerCase()) problems.push(`${source.name}: ${source.repository} is not ${brand.allowedOwner}'s, so every hub would refuse the catalog.`);
+    if (source.expectedSigner.trim().toLowerCase() !== brand.expectedSigner.trim().toLowerCase()) problems.push(`${source.name}: its expectedSigner is not ${brand.expectedSigner}, so every hub would refuse the catalog.`);
+  }
   const apps = [];
   const comingSoon = sources.comingSoon.map((c) => (c.mark ? { ...c, mark: markFor(c.mark) } : c));
   for (const source of sources.apps) {
@@ -276,14 +282,16 @@ async function main(argv) {
   const password = await askSecret("The hub key's password: ");
   if (!password) stop("no password was typed. Nothing was signed.");
   let signature;
+  let publicKey;
   try {
-    if (publicOf(pem, password) !== brand.catalogPublicKey) stop(`this key is not the one built into the hub (${shown(chosen.brandFile)}). Nothing was signed.`);
+    publicKey = publicOf(pem, password);
+    if (!trustedKeys(brand).includes(publicKey)) stop(`this key is not one built into the hub (${shown(chosen.brandFile)}). Nothing was signed.`);
     signature = signBytes(bytes, pem, password) + "\n";
   } catch (e) {
     if (e instanceof Stop) throw e;
-    stop(`the password did not open the hub key (${password.length} characters were typed). Nothing was signed. To try the password on its own: node tools\\make-hub-key.mjs --brand ${chosen.id} --check`);
+    stop(`the password did not open the hub key. Nothing was signed. To try the password on its own: node tools\\make-hub-key.mjs --brand ${chosen.id} --check`);
   }
-  if (!checkSignature(bytes, signature, brand.catalogPublicKey)) stop("the new signature did not check out. Nothing was uploaded.");
+  if (!checkSignature(bytes, signature, publicKey)) stop("the new signature did not check out. Nothing was uploaded.");
   const catalogFile = join(out, brand.catalog.file);
   const signatureFile = join(out, brand.catalog.signature);
   writeFileSync(catalogFile, bytes);

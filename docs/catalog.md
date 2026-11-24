@@ -5,7 +5,7 @@
 Each hub has its own catalog, made from its own list of apps. After any app release, double-click **Update OpenStage Catalog.bat** (OpenStage Hub) or **Update Prism Catalog.bat** (Prism Hub). It:
 
 1. reads each repository's newest published stable and preview releases (drafts never count);
-2. finds each setup file by the app's `setupPattern`, downloads any it has not checked before, computes its SHA-256 and checks its code signature (valid, timestamped, signed by the expected signer);
+2. finds each setup file by the app's `setupPattern`, downloads any it has not checked before, computes its SHA-256 and checks its code signature (valid, timestamped, signed by the expected signer). It stops if any app's repository is not the `allowedOwner`'s, or its signer is not the brand's, because hubs would refuse the catalog;
 3. lists every setup file that is missing or not properly signed and stops if there is any, before signing anything;
 4. puts each app's icon into the catalog as a picture, prints a table of what changed, asks for that hub key's password, signs the catalog, checks the signature against the key built into the hub, and uploads both files to the release named `catalog` in that hub's repository.
 
@@ -30,7 +30,7 @@ It needs Node.js and the GitHub command line (`gh`), signed in as the owner. Che
 | `programFile` | The program's file name inside its install folder |
 | `quietSwitch` | The installer's switches for an install with no questions that shows its progress bar |
 | `quietUninstallSwitch` | Used only when Windows lists no quiet uninstall command (default `/S`) |
-| `expectedSigner` | The name on the code signature |
+| `expectedSigner` | The name on the code signature. It must be the one in the brand's `brand.json`: the script stops, and hubs refuse the catalog, if it is any other |
 | `setupPattern` | A regular expression matching exactly one file of a release: its setup |
 | `ignoreTags` | Releases never to list (for example, ones published before code signing began) |
 | `extras` | Other downloads: `name`, `description` and a `pattern` matching the file |

@@ -8,6 +8,12 @@ Double-click **Make Hub Key.bat** and choose the hub. You choose its password. T
 
 The hub key is separate from the apps' own update keys and from the code-signing certificate.
 
+Its password must be at least 20 characters. To protect an existing key better, or give it a longer password, run `node tools/make-hub-key.mjs --brand <brand> --rewrap`: it is the same key, so installed hubs notice nothing. It keeps the file as it was beside it; check the new one with `--check`, make a new backup copy, then delete the old file and any older copies.
+
+## Once per hub: the offline backup key
+
+`node tools/make-hub-key.mjs --brand <brand> --backup` makes a second key in `OpenStage Hub backup key` (or `Prism Hub backup key`) in your user folder and writes its public half into `brand.json` (`catalogBackupKey`); commit that. Hubs built from then on also trust catalogs signed with it. Move that folder somewhere offline. If the hub key is ever lost, sign with the backup key by setting `HUB_KEY` to its file and running the Update Catalog script. It helps only hubs built after it was added.
+
 ## Once per hub: the repository
 
 The hub's repository must be **public** before any hub can download the catalog or its own updates: release files of a private repository are not downloadable without signing in. Both are public.
@@ -15,7 +21,7 @@ The hub's repository must be **public** before any hub can download the catalog 
 ## Each release
 
 1. Raise `RELEASE` in `tools/build-installer.mjs`, and the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.base.json`, to the new version (such as `1.0.2`). The build stops if they differ.
-2. Run the checks: `npm test`, `npm run typecheck`, and for each brand `node tools/apply-brand.mjs --brand <brand>` then `cargo test` in `src-tauri`.
+2. For each brand, `node tools/catalog-floor.mjs --brand <brand> --write`, so hubs built now refuse any catalog older than the one published now. Then run the checks: `npm test`, `npm run typecheck`, and for each brand `node tools/apply-brand.mjs --brand <brand>` then `cargo test` in `src-tauri`.
 3. Commit everything, tag that commit `v<version>`, and push both (`git push origin main v<version>`). `git status` must be clean: the tag has to point at the exact commit the installers are built from. If the build then shows something to fix, commit the fix and move the tag to it while no release uses it yet; a published tag is never moved.
 4. On the owner's computer, signed in to the signing service (`az login`), in a PowerShell window where the four signing settings are set first. They are the same account and profile names every app in both suites is signed with; they are not secret, but they are kept out of this public repository, so take them from your own notes:
 

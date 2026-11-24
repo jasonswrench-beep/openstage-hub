@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Install and update use the same six steps (the spec's "Installing, updating and opening"):
 //! 1. download the installer named in the catalog into the hub's own download folder (GitHub addresses only);
-//! 2. check its SHA-256 against the catalog; a mismatch deletes the file and stops;
-//! 3. check its code signature with Windows' own check: valid, timestamped, signed by the expected signer; anything else deletes it and stops;
+//! 2. check its SHA-256 against the catalog; a mismatch deletes the file and stops. From here until step 5 has started it, the file is held
+//!    open, so nothing can change or replace it after the check;
+//! 3. check its code signature with Windows' own check: valid, timestamped, and the brand's own certificate; anything else deletes it and stops;
 //! 4. if the app is running, ask the person to close it and wait (the hub never closes an app itself: that could lose unsaved work);
 //! 5. run the installer with its quiet switch (it shows its own progress bar, not its pages; installs are per user, so no administrator);
 //! 6. read the installed version back from Windows' installed apps list and confirm it, then delete the download.
@@ -13,6 +14,7 @@ use crate::state::{self, Record};
 use crate::system;
 use crate::trust;
 use serde::Serialize;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -42,8 +44,14 @@ fn download_path(id: &str, version: &str, ext: &str) -> PathBuf {
     state::downloads_dir().join(format!("{}-{}-setup.{ext}", clean(id), clean(version)))
 }
 
+/// An installer that passed its checks, held open so it stays the file that was checked.
+pub struct Checked {
+    pub path: PathBuf,
+    held: File,
+}
+
 /// Steps 1 to 3: the installer downloaded and checked, or why not. A file that fails a check is deleted.
-pub fn fetch_and_check(id: &str, release: &Release, signer: &str, cancel: &AtomicBool, report: Report) -> Result<PathBuf, String> {
+pub fn fetch_and_check(id: &str, release: &Release, cancel: &AtomicBool, report: Report) -> Result<Checked, String> {
     std::fs::create_dir_all(state::downloads_dir()).map_err(|_| "The hub's download folder could not be made.".to_string())?;
     let file = download_path(id, &release.version, "exe");
     let mut last = Instant::now() - Duration::from_secs(1);
@@ -57,22 +65,27 @@ pub fn fetch_and_check(id: &str, release: &Release, signer: &str, cancel: &Atomi
     crate::net::download(&release.url, &file, release.size, cancel, &mut progress).map_err(|e| e.words("installer"))?;
 
     report(event(id, "checking", "Checking"));
-    let refuse = |why: String| {
-        let _ = std::fs::remove_file(&file);
-        Err(why)
-    };
-    match trust::sha256_file(&file) {
-        Ok(sum) if sum.eq_ignore_ascii_case(&release.sha256) => {}
-        Ok(_) => return refuse("The download did not match its checksum, so nothing was installed.".into()),
-        Err(_) => return refuse("The download could not be read back to check it, so nothing was installed.".into()),
+    match check_held(&file, &release.sha256, cancel) {
+        Ok(held) => Ok(Checked { path: file, held }),
+        Err(why) => {
+            let _ = std::fs::remove_file(&file);
+            Err(why)
+        }
+    }
+}
+
+/// Steps 2 and 3 on a downloaded file, which is held open from before its checksum is computed.
+fn check_held(file: &Path, sha256: &str, cancel: &AtomicBool) -> Result<File, String> {
+    let unreadable = |_| "The download could not be read back to check it, so nothing was installed.".to_string();
+    let mut held = trust::hold(file).map_err(unreadable)?;
+    if !trust::sha256_of(&mut held).map_err(unreadable)?.eq_ignore_ascii_case(sha256) {
+        return Err("The download did not match its checksum, so nothing was installed.".into());
     }
     if cancel.load(Ordering::Relaxed) {
-        return refuse("Cancelled. Nothing was installed.".into());
+        return Err("Cancelled. Nothing was installed.".into());
     }
-    if let Err(why) = trust::check_signed_by(&file, signer) {
-        return refuse(format!("{why} Nothing was installed."));
-    }
-    Ok(file)
+    trust::check_installer(file).map_err(|why| format!("{why} Nothing was installed."))?;
+    Ok(held)
 }
 
 /// Step 4: waits while the app is open. Returns false when the person cancelled.
@@ -92,15 +105,17 @@ fn wait_until_closed(app: &App, folder: Option<&Path>, cancel: &AtomicBool, repo
     true
 }
 
-/// Runs a program and waits for it. Its exit code, or why it could not start.
-fn run_and_wait(program: &Path, args: &[String]) -> Result<i32, String> {
+/// Starts a held program, then lets it go: once it has started, Windows itself keeps the running file from being changed.
+fn start_held(program: &Path, args: &[String], held: File) -> Result<std::process::Child, String> {
     let mut command = std::process::Command::new(program);
     command.args(args);
     if let Some(folder) = program.parent() {
         command.current_dir(folder);
     }
-    match command.status() {
-        Ok(status) => Ok(status.code().unwrap_or(-1)),
+    let started = command.spawn();
+    drop(held);
+    match started {
+        Ok(child) => Ok(child),
         // ERROR_ELEVATION_REQUIRED
         Err(e) if e.raw_os_error() == Some(740) => {
             Err(format!("The installer asked for administrator rights. {} apps install for one person and never need them, so it was not run.", crate::brand::brand().short_name))
@@ -109,9 +124,15 @@ fn run_and_wait(program: &Path, args: &[String]) -> Result<i32, String> {
     }
 }
 
+/// Runs a held program and waits for it. Its exit code, or why it could not start.
+fn run_and_wait(program: &Path, args: &[String], held: File) -> Result<i32, String> {
+    let mut child = start_held(program, args, held)?;
+    Ok(child.wait().ok().and_then(|s| s.code()).unwrap_or(-1))
+}
+
 /// The whole install or update of an app.
 pub fn install(hub: &Hub, app: &App, release: &Release, cancel: &AtomicBool, report: Report) -> Result<(), String> {
-    let file = fetch_and_check(&app.id, release, &app.expected_signer, cancel, report)?;
+    let Checked { path: file, held } = fetch_and_check(&app.id, release, cancel, report)?;
     let result = (|| {
         let before = system::installed_apps();
         let folder = system::find_installed(&before, &app.installed_as).and_then(|e| e.folder());
@@ -119,7 +140,7 @@ pub fn install(hub: &Hub, app: &App, release: &Release, cancel: &AtomicBool, rep
             return Err("Cancelled. Nothing was installed.".to_string());
         }
         report(event(&app.id, "installing", "Installing"));
-        let code = run_and_wait(&file, &app.quiet_switch)?;
+        let code = run_and_wait(&file, &app.quiet_switch, held)?;
         if code != 0 {
             return Err(format!("The installer stopped with an error (code {code}), so {} may not have been installed.", app.name));
         }
@@ -190,8 +211,18 @@ pub fn uninstall(hub: &Hub, app: &App, cancel: &AtomicBool, report: Report) -> R
     if !program.is_file() {
         return Err("The uninstaller Windows lists is not there any more.".into());
     }
+    let held = match trusted_uninstaller(&program) {
+        Ok(held) => held,
+        Err(why) => {
+            // Windows' own list can be changed by any program the person runs, so a program it names is not simply run. The person can still
+            // remove the app from its folder or from Windows' Settings.
+            let opened = entry.folder().filter(|f| f.is_dir()).is_some_and(|f| system::shell_open(&f.to_string_lossy()).is_ok());
+            let next = if opened { " Its folder has been opened." } else { "" };
+            return Err(format!("{why} It was not run, and nothing was removed. You can remove {} in Windows' Settings.{next}", app.name));
+        }
+    };
     report(event(&app.id, "removing", "Removing"));
-    let code = run_and_wait(&program, &args)?;
+    let code = run_and_wait(&program, &args, held)?;
     if code != 0 {
         return Err(format!("The uninstaller stopped with an error (code {code})."));
     }
@@ -209,23 +240,78 @@ pub fn uninstall(hub: &Hub, app: &App, cancel: &AtomicBool, report: Report) -> R
     Err(format!("The uninstaller finished, but Windows still lists {}.", app.name))
 }
 
-/// The hub's own update: the same checks on its own installer, which then runs (showing its progress bar) once this hub has closed, and
-/// starts the new hub when it is done.
+/// An app's uninstaller, held open once its signature has been checked, or why it is not trusted.
+fn trusted_uninstaller(program: &Path) -> Result<File, String> {
+    let held = trust::hold(program).map_err(|_| "The uninstaller Windows lists could not be read to check it.".to_string())?;
+    trust::check_uninstaller(program)?;
+    Ok(held)
+}
+
+/// The hub's own update: the same checks on its own installer, which is started directly (no command line is built from its path) and then runs
+/// while this hub closes. /P shows its progress bar only, and /R starts the new hub when it is done.
 pub fn update_hub(release: &Release, cancel: &AtomicBool, report: Report) -> Result<(), String> {
-    let signer = crate::brand::brand().expected_signer.clone();
-    let file = fetch_and_check("hub", release, &signer, cancel, report)?;
+    let Checked { path, held } = fetch_and_check("hub", release, cancel, report)?;
     report(event("hub", "installing", "Installing"));
-    let exe = std::env::current_exe().map_err(|_| "The hub could not find its own program file.".to_string())?;
-    // cmd waits for the setup (start /wait), then starts the new hub. The two paths are under this person's local app data and are quoted.
-    let line = format!("/d /s /c \"start \"\" /wait \"{}\" /P & start \"\" \"{}\"\"", file.display(), exe.display());
-    let mut command = std::process::Command::new("cmd.exe");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.raw_arg(line);
-        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    start_held(&path, &hub_setup_switches(), held).map(|_| ()).map_err(|_| "Windows could not start the hub's installer.".to_string())
+}
+
+fn hub_setup_switches() -> [String; 2] {
+    ["/P".into(), "/R".into()]
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    fn folder(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("{name} {}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
     }
-    #[cfg(not(windows))]
-    command.arg(line);
-    command.spawn().map(|_| ()).map_err(|_| "Windows could not start the hub's installer.".to_string())
+
+    #[test]
+    fn a_file_changed_after_the_download_is_refused_and_one_that_is_checked_is_held() {
+        let dir = folder("hub-check");
+        let file = dir.join("setup.exe");
+        std::fs::write(&file, b"MZ not a real setup").unwrap();
+        let sum = trust::sha256_file(&file).unwrap();
+        let cancel = AtomicBool::new(false);
+        // Changed between the download and the check.
+        std::fs::write(&file, b"MZ something else").unwrap();
+        assert!(check_held(&file, &sum, &cancel).unwrap_err().contains("did not match its checksum"));
+        // The right bytes, but not signed: refused all the same, and let go of.
+        std::fs::write(&file, b"MZ not a real setup").unwrap();
+        assert!(check_held(&file, &sum, &cancel).is_err());
+        std::fs::remove_file(&file).expect("a refused file is let go, so it can be deleted");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_unsigned_stand_in_uninstaller_is_refused_and_let_go() {
+        let dir = folder("hub-uninstaller");
+        let file = dir.join("uninstall.exe");
+        std::fs::write(&file, b"MZ not a real uninstaller").unwrap();
+        let why = trusted_uninstaller(&file).unwrap_err();
+        assert!(why.contains("uninstaller"), "{why}");
+        std::fs::remove_file(&file).expect("a refused file is let go");
+        assert!(trusted_uninstaller(&file).is_err(), "one that is not there");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The setup is started by its path, with no command line built from it, so a profile folder with % or & or spaces in its name is only a
+    /// name. A copy of a Windows program stands in for the setup.
+    #[test]
+    fn a_held_program_starts_from_any_folder_name_and_is_then_let_go() {
+        for name in ["hub 100%PATH% & co", "hub %TEMP%^^"] {
+            let dir = folder(name);
+            let program = dir.join("stand in.exe");
+            std::fs::copy(r"C:\Windows\System32\whoami.exe", &program).unwrap();
+            let held = trust::hold(&program).unwrap();
+            assert!(std::fs::write(&program, b"swapped").is_err(), "held until it has started");
+            let code = run_and_wait(&program, &["/upn".into()], held);
+            assert!(code.is_ok(), "{name}: {code:?}");
+            std::fs::remove_dir_all(&dir).expect("let go once it has ended");
+        }
+        assert_eq!(hub_setup_switches(), ["/P", "/R"], "quiet, and start the hub again");
+    }
 }

@@ -20,7 +20,12 @@
     "signature": "openstage-catalog.json.sig"
   },
   "catalogPublicKey": "h5cCTTEu/3CCO6WxUVGQKhkMzc1jtbzTseujqgxIo5U=",
+  "catalogBackupKey": "",
+  "minimumCatalogDate": "2026-11-18T04:11:48Z",
+  "allowedOwner": "jasonswrench-beep",
   "expectedSigner": "Jason Wrench",
+  "signerSubject": ["O=Jason Wrench", "C=US"],
+  "signerIssuers": ["Microsoft ID Verified CS "],
   "sibling": {
     "label": "Also from Jason Wrench: Prism Hub",
     "url": "https://github.com/jasonswrench-beep/prism-hub/releases"

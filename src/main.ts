@@ -14,6 +14,8 @@ let view: View | null = null;
 const jobs = new Map<string, JobEvent>();
 /** The problem sentence of the last failed job, by app id, until the next try. */
 const problems = new Map<string, string>();
+/** What Retry does for an app whose last try failed, when that was not an install. */
+const tryAgain = new Map<string, () => void>();
 /** A sentence that replaces the status line once, after a job ends ("OpenExplainer 0.2.0 alpha 5 is installed."). */
 let notice: string | null = null;
 
@@ -218,7 +220,10 @@ $("install-all").addEventListener("click", () => {
 function startAll(kind: "update" | "install") {
   if (!view) return;
   const n = kind === "update" ? updatable(view).length + (view.hubUpdate ? 1 : 0) : installable(view).length;
-  for (const a of kind === "update" ? updatable(view) : installable(view)) problems.delete(a.id);
+  for (const a of kind === "update" ? updatable(view) : installable(view)) {
+    problems.delete(a.id);
+    tryAgain.delete(a.id);
+  }
   notice = null;
   announce(kind === "update" ? `Updating ${n}, one after another${view.hubUpdate ? ", the hub last" : ""}.` : `Installing ${n} apps, one after another.`);
   void act("start_all", { kind });
@@ -263,18 +268,23 @@ function confirmUninstall(app: AppView) {
     "Uninstall",
     `Uninstall ${app.name}`,
     "Keep it",
-    () => start(app.id, "uninstall"),
+    () => {
+      tryAgain.set(app.id, () => confirmUninstall(app));
+      start(app.id, "uninstall");
+    },
   );
 }
 
 function start(id: string, command: "start_job" | "uninstall", extra: Record<string, unknown> = {}) {
   problems.delete(id);
+  if (command === "start_job") tryAgain.delete(id);
   notice = null;
   void act(command, { id, ...extra });
 }
 
 const actions = {
   install: (a: AppView) => start(a.id, "start_job"),
+  retry: (a: AppView) => (tryAgain.get(a.id) ?? (() => start(a.id, "start_job")))(),
   cancel: (a: AppView) => act("cancel_job", { id: a.id }),
   open: (a: AppView) => act("open_app", { id: a.id }),
   whatsNew: (a: AppView) => act("open_release_page", { id: a.id }),
@@ -282,6 +292,7 @@ const actions = {
   uninstall: confirmUninstall,
   download: (a: AppView, index: number) => {
     problems.delete(a.id);
+    tryAgain.set(a.id, () => actions.download(a, index));
     notice = null;
     void act("download_extra", { id: a.id, index });
   },

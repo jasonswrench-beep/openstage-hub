@@ -4,7 +4,7 @@ Checks only a person can do, on a real Windows account. Tick each one off with t
 
 OpenStage Hub and Prism Hub are now one program built from this repository with two brand folders (`brands/openstage`, `brands/prism`), so a behaviour check done on one hub holds for the other. Checks that depend on the brand (the name, the icon, the apps, the installers) are listed for each.
 
-## Checked by Claude
+## Checked by the build agent
 
 On 2026-11-15 (no need to repeat unless something changes):
 
@@ -27,16 +27,24 @@ On 2026-11-17, Update all and Install all (not released; comes with 1.0.2):
 - `npm test` (12 tests) and `npm run typecheck` pass; built as each hub, `cargo test` passes 24 tests (the order Update all takes, which apps Install all takes, and the sentence at the end).
 - In a browser with the stand-in, for both hubs: Update all does the closed app first and the open one last, the waiting rows say "waiting its turn", Stop leaves the rest offered, a failure does not stop the others, and the hub goes last when the catalog offers one. Install all asks first, "Not now" has the focus, and Escape returns it to the button. By keyboard alone; the focus moves to Stop, and to the Desktop heading when the notice goes. Light, dark, and half the window's width (200 percent) with nothing scrolling sideways.
 
+On 2026-11-24, the fixes from the security review of 2026-11-17 (not released; come with 1.0.2):
+
+- `npm test` (14 tests) passes; `cargo test` passes 33 tests for each hub. With the real published catalogs and keys, both hubs read them as before (9 OpenStage apps, 5 Prism apps). Copies signed with a test key that name another owner, another signer or an older date are refused by both.
+- All twelve suite uninstallers on your PC are validly signed, timestamped, with one and the same subject, issued by a "Microsoft ID Verified CS" authority; installed programs and uninstallers pass the hub's new check.
+- The key tools were tried on throwaway keys in a copy of the repository, never on the hub keys.
+
+For you, when you choose (owner steps from the review): rewrap each hub key with a 20+ character password, and make each hub's offline backup key (`docs/releasing.md`).
+
 ## First release (list item 1)
 
 Done for both hubs by 2026-11-15: the hub keys made, both repositories public, both catalogs published, 1.0.0 and 1.0.1 released and signed. The footer links between the two hubs now open (both repositories are public). Still to do:
 
 - [ ] Each app's quiet install switch: below, under "Installing, updating, removing".
-- [x] 2026-11-17: the OpenStage catalog is republished (generated 2026-11-17 02:28 UTC). Claude downloaded it from GitHub: its signature checks against the key in `brands/openstage/brand.json`, and it offers OpenStage Author 0.1.0 alpha 5, Recorder 0.1.0 alpha 5, OpenAssess 0.1.0 alpha 29, OpenExplainer 0.2.0 alpha 5, Capture Express 0.1.0 alpha 5, Guide 0.1.0 alpha 10 and PDF Remediator 0.3.0 alpha 10, with the hub entry still 1.0.1. Every app's icon is inside the catalog, and the eight icon files for 1.0.1 hubs on the release match their SHA-256 in it. Prism's catalog was already current.
-- [x] 2026-11-18: republished (generated 2026-11-18 00:26 UTC) with OpenStage Studio and OpenStage Package Doctor under Desktop, no release, and Coming soon empty. Claude downloaded it from GitHub: its signature checks against the key in `brands/openstage/brand.json`, every app's version is as before, the eight icon files for 1.0.1 hubs match their SHA-256, and apart from its date it is the catalog the 1.0.0, 1.0.1 and current hub code were shown and accepted.
+- [x] 2026-11-17: the OpenStage catalog is republished (generated 2026-11-17 02:28 UTC). The build agent downloaded it from GitHub: its signature checks against the key in `brands/openstage/brand.json`, and it offers OpenStage Author 0.1.0 alpha 5, Recorder 0.1.0 alpha 5, OpenAssess 0.1.0 alpha 29, OpenExplainer 0.2.0 alpha 5, Capture Express 0.1.0 alpha 5, Guide 0.1.0 alpha 10 and PDF Remediator 0.3.0 alpha 10, with the hub entry still 1.0.1. Every app's icon is inside the catalog, and the eight icon files for 1.0.1 hubs on the release match their SHA-256 in it. Prism's catalog was already current.
+- [x] 2026-11-18: republished (generated 2026-11-18 00:26 UTC) with OpenStage Studio and OpenStage Package Doctor under Desktop, no release, and Coming soon empty. The build agent downloaded it from GitHub: its signature checks against the key in `brands/openstage/brand.json`, every app's version is as before, the eight icon files for 1.0.1 hubs match their SHA-256, and apart from its date it is the catalog the 1.0.0, 1.0.1 and current hub code were shown and accepted.
 - [x] 2026-11-18: republished again (generated 01:56 UTC) after Studio's and Package Doctor's repositories were made public. It offers OpenStage Studio 0.1.0 alpha 1 (its setup downloads without signing in, matches the catalog's SHA-256 and is signed by Jason Wrench) and carries Package Doctor's own icon; Package Doctor has no release yet. Signature, versions and the nine icon files for 1.0.1 hubs checked from GitHub.
-- [x] 2026-11-18: the Prism catalog is republished (generated 04:00 UTC) with Prism Transcribe and Prism Survey. Claude downloaded it from GitHub's public address: it and its signature match the files the script signed, the signature checks against the key in `brands/prism/brand.json`, and it offers PrismQDA 0.1.0 beta 3, PrismStatistics 0.2.2, Prism Reference Manager 0.1.3, Prism Transcribe 0.1.0 alpha 1 and Prism Survey 0.1.0 beta 1, with the hub entry still 1.0.1. All five icons are inside it; the two new ones match their files in `brands/prism/icons`. Both new setup addresses answer without signing in.
-- [x] 2026-11-18: republished again (generated 04:09 UTC) expecting 0.1.0-alpha.1 for Prism Transcribe and 0.1.0-beta.3 for PrismQDA in Windows. Claude checked it from GitHub's public address (signature, the same five versions and icons), and a development Prism Hub with `--print-view` reads it as fresh and shows Prism Transcribe installed at 0.1.0-alpha.1 with no update offered.
+- [x] 2026-11-18: the Prism catalog is republished (generated 04:00 UTC) with Prism Transcribe and Prism Survey. The build agent downloaded it from GitHub's public address: it and its signature match the files the script signed, the signature checks against the key in `brands/prism/brand.json`, and it offers PrismQDA 0.1.0 beta 3, PrismStatistics 0.2.2, Prism Reference Manager 0.1.3, Prism Transcribe 0.1.0 alpha 1 and Prism Survey 0.1.0 beta 1, with the hub entry still 1.0.1. All five icons are inside it; the two new ones match their files in `brands/prism/icons`. Both new setup addresses answer without signing in.
+- [x] 2026-11-18: republished again (generated 04:09 UTC) expecting 0.1.0-alpha.1 for Prism Transcribe and 0.1.0-beta.3 for PrismQDA in Windows. The build agent checked it from GitHub's public address (signature, the same five versions and icons), and a development Prism Hub with `--print-view` reads it as fresh and shows Prism Transcribe installed at 0.1.0-alpha.1 with no update offered.
 - [ ] Install Prism Transcribe and Prism Survey from Prism Hub: each progress bar shows, no pages; Windows lists each at 0.1.0; Open opens each. Every row shows its own icon.
 - [x] 2026-11-18: republished (generated 04:11 UTC) with OpenStage Package Doctor 0.6.0, its first release (stable). Its setup downloads without signing in, matches the catalog's SHA-256 and the release's own .sha256.txt, and is signed by Jason Wrench. Signature and the nine icon files for 1.0.1 hubs checked from GitHub; every other app unchanged.
 - [ ] Install OpenStage Studio from the hub: its progress bar shows, no pages; Windows lists 0.1.0; Open opens it.
@@ -45,7 +53,7 @@ Done for both hubs by 2026-11-15: the hub keys made, both repositories public, b
 
 ## Web links and planned apps (list item 2)
 
-- [ ] OpenStage Scroll and Tutorial videos stay hidden until they have addresses. Scroll's will be its address on your server once it is deployed (Scroll's list item 1). Tell Claude each address, or put it in `url` under `web` in `brands/openstage/apps.json`.
+- [ ] OpenStage Scroll and Tutorial videos stay hidden until they have addresses. Scroll's will be its address on your server once it is deployed (Scroll's list item 1). Tell the build agent each address, or put it in `url` under `web` in `brands/openstage/apps.json`.
 - [ ] OpenStage Studio and OpenStage Package Doctor are listed under Desktop now, reading "No release yet" with no Install button (your choice, 2026-11-17: `listedBeforeRelease` in `brands/openstage/apps.json`). When each repository is public with a signed release, the next Update OpenStage Catalog run lists it and Install appears by itself. OpenStage Rehearse stays out of the catalog until `jasonswrench-beep/openstage-rehearse` exists, then shows under Coming soon. If a repository gets a different name, change `repository` there.
 - [ ] When each of them makes its first release, check its program file name and quiet switch in `brands/openstage/apps.json` (they are what a Tauri app made like the others would have).
 - [ ] Check that openstageauthor.com shows what you want.
@@ -81,11 +89,12 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 - [ ] OpenStage Guide (`/P`)
 - [ ] PDF Remediator (`/S`): installs with no window at all (its installer has no progress-bar-only mode). Say if you would rather it showed its pages.
 - [ ] OpenStage Capture Express (`/SILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER`): its progress window shows, no questions.
-- [ ] PrismQDA (`/P`): its progress bar shows, no pages; Windows lists 0.1.0-beta.3 (its installer is built with the whole version, like Transcribe's; the catalog now expects that). If Windows lists 0.1.0 instead, the hub says so after the install: tell Claude, and `windowsListsFullVersion` comes off PrismQDA in `brands/prism/apps.json`.
+- [ ] PrismQDA (`/P`): its progress bar shows, no pages; Windows lists 0.1.0-beta.3 (its installer is built with the whole version, like Transcribe's; the catalog now expects that). If Windows lists 0.1.0 instead, the hub says so after the install: tell the build agent, and `windowsListsFullVersion` comes off PrismQDA in `brands/prism/apps.json`.
 - [ ] PrismStatistics (`/P`)
 - [ ] Prism Reference Manager (`/P`)
 - [ ] Prism Transcribe (`/P`): its progress bar shows, no pages, and Open starts `prism-transcribe.exe`. 2026-11-18, first try: it installed (into `AppData\Local\Prism Transcribe`, with `prism-transcribe.exe`), but the hub said "Windows lists Prism Transcribe as version 0.1.0-alpha.1, not 0.1.0": its installer is built with the whole version. The catalog now expects 0.1.0-alpha.1 (`windowsListsFullVersion`). After the catalog is republished, Check for updates: its row shows installed 0.1.0-alpha.1 with no update offered, and Reinstall from its menu ends without that message.
-- [ ] Prism Survey (`/P`): its progress bar shows, no pages; Windows lists "Prism Survey" 0.1.0, and Open starts `prismsurvey-app.exe` (read from its build files, as for Transcribe). Its release was published as `v0.1.0-preview.2`, a version the hub does not read; on 2026-11-18 Claude added the tag `v0.1.0-beta.1` at the same commit (6954716) and moved the release to it, marked pre-release, with the same signed setup. Later Survey releases need alpha, beta or rc in the tag.
+- [ ] Prism Survey (`/P`): its progress bar shows, no pages; Windows lists "Prism Survey" 0.1.0, and Open starts `prismsurvey-app.exe` (read from its build files, as for Transcribe). Its release was published as `v0.1.0-preview.2`, a version the hub does not read; on 2026-11-18 the build agent added the tag `v0.1.0-beta.1` at the same commit (6954716) and moved the release to it, marked pre-release, with the same signed setup. Later Survey releases need alpha, beta or rc in the tag.
+- [ ] Uninstall of each app still works (its uninstaller is now checked for your signature first): try one Tauri app, PDF Remediator and Capture Express. On 2026-11-24 all twelve uninstallers installed on your PC passed that check.
 - [ ] Uninstall says the app's documents and projects stay; afterwards they are still there and the app is gone from Windows' list.
 - [ ] Update with the app open: the row says "Close ... to continue"; closing it lets the update go on. The hub never closes it.
 - [ ] Update all with two or more updates and one app open: the closed apps update one after another, then the open one waits with "Close ... to continue". The notice reads "Updating 1 of 3: ..." throughout, and the status line ends with "All 3 apps updated."
@@ -112,7 +121,7 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 
 ## The hub updating itself
 
-- [ ] With 1.0.2 published and both catalogs updated: each installed hub shows "A new version of the hub is ready"; Update closes the hub, its installer's progress bar shows, the new hub starts and says it was updated.
+- [ ] With 1.0.2 published and both catalogs updated: each installed hub shows "A new version of the hub is ready"; Update closes the hub, its installer's progress bar shows, the new hub starts and says it was updated. (The first update made by 1.0.2's own new code is 1.0.2 to 1.0.3: its installer now starts the new hub itself.)
 
 ## IT policy file
 

@@ -11,7 +11,9 @@ A native window (Tauri: a Rust shell with a TypeScript page) of about 470 by 720
 The hub reads one small signed file instead of asking GitHub about each app: the repositories name their installers in different ways, and GitHub's unsigned lookup allows only 60 requests an hour per network, which a shared campus network can use up. Release downloads have no such limit.
 
 - It lives on the release named `catalog` in the hub's own repository: `https://github.com/jasonswrench-beep/openstage-hub/releases/download/catalog/openstage-catalog.json`, with `openstage-catalog.json.sig` beside it (Prism Hub: `prism-hub`, `prism-catalog.json`).
-- The signature is Ed25519 over the file's exact bytes. The public half of that hub's key is built into the program (`brands/<brand>/brand.json`, `catalogPublicKey`). Each hub has its own key, so neither trusts the other's catalog. A catalog that fails the check is ignored.
+- The signature is Ed25519 over the file's exact bytes. The public half of that hub's key is built into the program (`brands/<brand>/brand.json`, `catalogPublicKey`). Each hub has its own key, so neither trusts the other's catalog. A catalog that fails the check is ignored. A hub can also carry the public half of a second key that the owner keeps offline (`catalogBackupKey`), so that losing the first does not strand installed hubs.
+- What the catalog may say is limited by the program, so a stolen catalog key alone cannot make the hub run someone else's file. Every app must be in a repository of the one owner named in `brand.json` (`allowedOwner`) and name the one signer named there (`expectedSigner`); a catalog that names any other is refused whole.
+- A catalog older than the newest one published when the hub was built (`minimumCatalogDate`) is refused, even on a first run.
 - Every address in it must be `https://github.com/<that app's repository>/releases/download/...`; every checksum, version, switch and file name is checked before it is used (`src-tauri/src/catalog.rs`).
 - A catalog older than the one already on disk is refused, so an old signed catalog cannot be replayed to offer older installers.
 - A catalog that needs a newer hub (`minimumHubVersion`, or a higher `format`) shows only the hub's update banner.
@@ -24,8 +26,8 @@ The hub reads one small signed file instead of asking GitHub about each app: the
 `src-tauri/src/jobs.rs`:
 
 1. Download the installer from the catalog's address into `%LOCALAPPDATA%\org.openstage.hub\downloads`. Only github.com and GitHub's release download hosts are accepted; each redirect is followed by hand and its host checked.
-2. Check its SHA-256 against the catalog. A mismatch deletes the file and stops.
-3. Check its code signature with Windows' own check (WinVerifyTrust, with revocation): valid, timestamped and signed by the catalog's expected signer (Jason Wrench). Anything else deletes the file and stops.
+2. Check its SHA-256 against the catalog. A mismatch deletes the file and stops. From before the checksum until step 5 has started it, the file is held open so that no other program can change, move or replace it.
+3. Check its code signature with Windows' own check (WinVerifyTrust, with revocation): valid, timestamped, and the certificate `brand.json` describes: the signer's name, parts of its full subject (`signerSubject`) and the authority that issued it (`signerIssuers`). Anything else deletes the file and stops. None of this comes from the catalog.
 4. If the app is running, ask the person to close it and wait. The hub never closes an app itself.
 5. Run the installer with its quiet switch (from the catalog), which shows the installer's own progress bar rather than its pages. Installs are per user; an installer that asks for administrator rights is not run.
 6. Read the installed version back from Windows' per-user installed apps list and confirm it, then delete the download.
@@ -50,13 +52,13 @@ Open runs the program file (from the catalog) in the install folder Windows reco
 
 ## Uninstalling
 
-Runs the uninstaller Windows lists, without its questions (its `QuietUninstallString`, or its `UninstallString` with the catalog's quiet uninstall switch), after a confirmation saying the app's documents and projects stay where they are. The hub then watches Windows' list until the app is gone.
+Runs the uninstaller Windows lists, without its questions (its `QuietUninstallString`, or its `UninstallString` with the catalog's quiet uninstall switch), after a confirmation saying the app's documents and projects stay where they are. Before it runs, the uninstaller must carry the same signature an installer must (without looking up revocation, so that uninstalling works offline and a revoked app can still be removed). Any program the person runs can change Windows' per-user list, so one that is not the app's own signed uninstaller is not run: the hub says so and opens the app's folder. The hub then watches Windows' list until the app is gone.
 
 Uninstalling the hub removes the hub, its start-up entry, its cached catalog and its download folder (`src-tauri/installer-hooks.nsh`). It never removes the apps.
 
 ## The hub's own updates
 
-The catalog's `hub` entry names the hub's newest release. When it is newer and no app has an update, the window shows "A new version of the hub is ready" with an Update button; when apps have updates too, Update all does the hub last (above). The hub runs steps 1 to 3 on its own installer, closes, the installer runs (showing its progress bar), and the new hub starts. After the restart it says "The hub was updated to ..." once.
+The catalog's `hub` entry names the hub's newest release. When it is newer and no app has an update, the window shows "A new version of the hub is ready" with an Update button; when apps have updates too, Update all does the hub last (above). The hub runs steps 1 to 3 on its own installer, starts it (with `/P` and `/R`) and closes; the installer shows its progress bar and starts the new hub. If that installer fails, the hub that was there stays installed and is opened from the Start menu. After the restart it says "The hub was updated to ..." once.
 
 ## The tray and Start with Windows
 
@@ -91,6 +93,6 @@ A development build (not a release build) also reads:
 
 ## Two hubs, one program
 
-`brands/openstage` and `brands/prism` each hold one hub's `brand.json` (name, identifier, colours, repository, catalog file names, the public half of its key, the signer, the other hub's link), its icon and the program icons drawn from it (`app-icons`, by `tools/make-icons.mjs`), its list of apps (`apps.json`) with their icons, and the setup file names its tests check (`setup-names.json`).
+`brands/openstage` and `brands/prism` each hold one hub's `brand.json` (name, identifier, colours, repository, catalog file names, the public halves of its keys, the only owner, signer and certificate authority it accepts, the oldest catalog it accepts, the other hub's link), its icon and the program icons drawn from it (`app-icons`, by `tools/make-icons.mjs`), its list of apps (`apps.json`) with their icons, and the setup file names its tests check (`setup-names.json`).
 
 Every script takes the brand as `--brand <folder>` or the `HUB_BRAND` setting; the `.bat` files pass it (Build, Run and Update for each hub, and one Make Hub Key.bat that asks which). Before a build, `tools/apply-brand.mjs` writes `src-tauri/tauri.conf.json` from `src-tauri/tauri.base.json` and the brand; that file is not in the repository. `src-tauri/build.rs` reads the same brand into the program and stops if `tauri.conf.json` was set up for the other one. The window gets its brand from Vite (`virtual:brand`, in `vite.config.ts`). Nothing else in the code names either hub, and both hubs share one version number.

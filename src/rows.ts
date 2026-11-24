@@ -14,6 +14,8 @@ export interface RowState {
 
 export interface RowActions {
   install(a: AppView): void;
+  /** Does again what failed: the install, the download, or the uninstall (which asks first, as before). */
+  retry(a: AppView): void;
   cancel(a: AppView): void;
   open(a: AppView): void;
   whatsNew(a: AppView): void;
@@ -156,7 +158,7 @@ export function appRow(a: AppView, s: RowState, act: RowActions, keep?: HTMLElem
   } else if (s.problem) {
     main.textContent = "Retry";
     main.setAttribute("aria-label", `Retry ${a.name}`);
-    mainAction = () => act.install(a);
+    mainAction = () => act.retry(a);
     detail.textContent = s.problem;
     detail.classList.add("problem");
   } else if (a.needsNewerHub) {

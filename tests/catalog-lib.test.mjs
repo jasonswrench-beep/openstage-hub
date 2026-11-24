@@ -5,11 +5,13 @@ import { test } from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  appEntry, baseVersion, changes, checkSignature, compareVersions, downloadUrl, findAsset, makeKey, markOf, MOST_ICON_BYTES, pickReleases, previewMismatch, publicOf, releaseEntry, signBytes, stamp,
+  appEntry, baseVersion, changes, checkSignature, compareVersions, downloadUrl, findAsset, makeKey, markOf, MOST_ICON_BYTES, pickReleases, previewMismatch, protectKey, publicOf, releaseEntry, rewrapKey, signBytes, stamp, usesScrypt,
   windowsVersionFor,
 } from "../tools/catalog-lib.mjs";
 import { brandIds, loadBrand, root } from "../tools/brand.mjs";
 import { branded } from "../tools/apply-brand.mjs";
+import { floorProblem, trustedKeys } from "../tools/catalog-floor.mjs";
+import { generateKeyPairSync } from "node:crypto";
 
 const rel = (tag, draft = false, assets = []) => ({ tag_name: tag, draft, assets });
 
@@ -129,9 +131,20 @@ test("every brand has what the build and the hub need, and no brand value of one
   assert.ok(ids.length >= 2, "both hubs are built from this code");
   const all = ids.map((id) => loadBrand(id));
   for (const { id, dir, brand, apps } of all) {
-    for (const key of ["productName", "shortName", "identifier", "programName", "startMenuFolder", "publisher", "icon", "repository", "catalogPublicKey", "expectedSigner"]) {
+    for (const key of ["productName", "shortName", "identifier", "programName", "startMenuFolder", "publisher", "icon", "repository", "catalogPublicKey", "expectedSigner", "allowedOwner", "minimumCatalogDate"]) {
       assert.ok(typeof brand[key] === "string" && brand[key], `${id}: brand.json has ${key}`);
     }
+    // The trust anchors: every app the catalog could list must be one the hub accepts.
+    const owner = brand.allowedOwner.toLowerCase();
+    for (const repository of [brand.repository, ...apps.apps.map((a) => a.repository)]) {
+      assert.equal(repository.split("/")[0].toLowerCase(), owner, `${id}: ${repository} is ${brand.allowedOwner}'s`);
+    }
+    for (const app of apps.apps) assert.equal(app.expectedSigner, brand.expectedSigner, `${id}/${app.id}: its signer is the brand's`);
+    assert.ok(brand.signerIssuers.length && brand.signerIssuers.every((i) => i.trim().length > 5), `${id}: brand.json names who may issue the signing certificate`);
+    assert.ok(brand.signerSubject.length && brand.signerSubject.every((p) => /^[A-Z]+=./.test(p)), `${id}: brand.json names parts of the certificate's subject`);
+    assert.match(brand.minimumCatalogDate, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/, `${id}: minimumCatalogDate is a catalog's date`);
+    assert.ok(brand.catalogBackupKey === "" || Buffer.from(brand.catalogBackupKey, "base64").length === 32, `${id}: the backup key's public half, or none yet`);
+    assert.notEqual(brand.catalogBackupKey, brand.catalogPublicKey, `${id}: the backup key is another key`);
     assert.ok(existsSync(join(dir, brand.icon)), `${id}: its icon ${brand.icon} is in its folder`);
     for (const name of ["32x32.png", "128x128.png", "128x128@2x.png", "icon.ico", "icon.png", "tray.png", "tray-dot.png"]) {
       assert.ok(existsSync(join(dir, "app-icons", name)), `${id}: app-icons/${name} (tools/make-icons.mjs makes it)`);
@@ -151,4 +164,39 @@ test("every brand has what the build and the hub need, and no brand value of one
   const conf = branded(JSON.parse(readFileSync(join(root, "src-tauri", "tauri.base.json"), "utf8")), all[0].brand, all[0].id);
   assert.equal(conf.identifier, all[0].brand.identifier);
   assert.ok(conf.bundle.icon.every((p) => p.startsWith(`../brands/${all[0].id}/app-icons/`)), "the program icons come from the brand's folder");
+});
+
+test("a hub key file is protected with scrypt, and rewrapping keeps the same key", () => {
+  const password = "four unrelated words here";
+  const { privatePem, publicB64 } = makeKey(password);
+  assert.ok(usesScrypt(privatePem), "new keys are protected with scrypt");
+  assert.match(privatePem, /^-----BEGIN ENCRYPTED PRIVATE KEY-----/);
+  assert.equal(publicOf(privatePem, password), publicB64);
+  assert.throws(() => publicOf(privatePem, "another password"));
+
+  // A key file made the older way (PBKDF2, as the hub keys were), rewrapped.
+  const { privateKey } = generateKeyPairSync("ed25519");
+  const oldPem = privateKey.export({ type: "pkcs8", format: "pem", cipher: "aes-256-cbc", passphrase: "the old password" });
+  assert.ok(!usesScrypt(oldPem));
+  const before = publicOf(oldPem, "the old password");
+  const same = rewrapKey(oldPem, "the old password");
+  assert.ok(usesScrypt(same));
+  assert.equal(publicOf(same, "the old password"), before, "the same key");
+  const changed = rewrapKey(oldPem, "the old password", password);
+  assert.equal(publicOf(changed, password), before, "the same key, with a new password");
+  assert.throws(() => publicOf(changed, "the old password"));
+  assert.throws(() => rewrapKey(oldPem, "wrong"), "the old password is needed");
+  // A catalog signed with the rewrapped key checks against the same public half.
+  const bytes = Buffer.from("{}");
+  assert.ok(checkSignature(bytes, signBytes(bytes, changed, password), before));
+});
+
+test("the oldest catalog a hub accepts is never newer than the published one", () => {
+  assert.deepEqual(floorProblem("2026-11-18T04:11:48Z", "2026-11-18T04:11:48Z"), {});
+  assert.match(floorProblem("2026-11-18T04:11:49Z", "2026-11-18T04:11:48Z").stop, /would refuse it/);
+  assert.match(floorProblem("2026-11-01T00:00:00Z", "2026-11-18T04:11:48Z").note, /safe/);
+  assert.match(floorProblem("", "2026-11-18T04:11:48Z").stop, /no minimumCatalogDate/);
+  assert.match(floorProblem(undefined, "2026-11-18T04:11:48Z").stop, /no minimumCatalogDate/);
+  assert.deepEqual(trustedKeys({ catalogPublicKey: "a", catalogBackupKey: "" }), ["a"]);
+  assert.deepEqual(trustedKeys({ catalogPublicKey: "a", catalogBackupKey: "b" }), ["a", "b"]);
 });

@@ -149,6 +149,30 @@ pub fn verify_signature(public_key_b64: &str, bytes: &[u8], signature_text: &str
         .map_err(|_| "The catalog's signature did not match, so the catalog was not used.".to_string())
 }
 
+/// Whether any of the built-in keys (the hub key, and the owner's offline backup key) signed these exact bytes.
+pub fn verify_any(public_keys_b64: &[String], bytes: &[u8], signature_text: &str) -> Result<(), String> {
+    let mut first = Err("This copy of the hub has no catalog key built in, so it cannot trust any catalog.".to_string());
+    for (i, key) in public_keys_b64.iter().enumerate() {
+        let one = verify_signature(key, bytes, signature_text);
+        if one.is_ok() {
+            return one;
+        }
+        if i == 0 {
+            first = one;
+        }
+    }
+    first
+}
+
+/// Refuses a catalog older than the newest one published when this hub was built, so an old signed catalog cannot be replayed even to a hub
+/// that has kept none yet. (`generated` is always 2026-11-15T18:04:00Z, so the two compare as text.)
+pub fn check_floor(catalog: &Catalog, minimum: &str) -> Result<(), String> {
+    if catalog.generated.as_str() < minimum {
+        return Err("The catalog is older than this hub, so it was not used.".into());
+    }
+    Ok(())
+}
+
 /// Reads a catalog whose signature has already been checked, and checks every value the hub will act on.
 pub fn parse(bytes: &[u8]) -> Result<Catalog, String> {
     if bytes.len() > MOST_BYTES {
@@ -162,7 +186,7 @@ pub fn parse(bytes: &[u8]) -> Result<Catalog, String> {
 /// Every app's id, name and mark, every address and every checksum: an address must be on GitHub, in that app's own repository's releases.
 pub fn validate(c: &Catalog) -> Result<(), String> {
     let bad = |what: String| Err(format!("The catalog has a problem ({what}), so it was not used."));
-    if c.generated.len() != 20 || !c.generated.ends_with('Z') {
+    if !utc_stamp(&c.generated) {
         return bad("its date".into());
     }
     if let Some(min) = &c.minimum_hub_version {
@@ -185,13 +209,17 @@ pub fn validate(c: &Catalog) -> Result<(), String> {
         if !plain_repository(&app.repository) {
             return bad(what("its repository"));
         }
+        // The trust anchors are in the program, not the catalog: a stolen catalog key alone cannot make the hub run someone else's file.
+        if !crate::brand::brand().owns(&app.repository) {
+            return bad(what("its repository's owner"));
+        }
         if !plain_program_file(&app.program_file) {
             return bad(what("its program file"));
         }
         if app.quiet_switch.is_empty() || !app.quiet_switch.iter().chain(&app.quiet_uninstall_switch).all(|s| plain_switch(s)) {
             return bad(what("its installer switches"));
         }
-        if app.expected_signer.trim().is_empty() {
+        if !app.expected_signer.trim().eq_ignore_ascii_case(crate::brand::brand().expected_signer.trim()) {
             return bad(what("its signer"));
         }
         if !(1..=2).contains(&app.mark.letters.chars().count()) || !app.mark.letters.chars().all(|ch| ch.is_alphanumeric()) || !hex_color(&app.mark.color) {
@@ -254,6 +282,18 @@ pub fn in_releases(url: &str, repository: &str) -> bool {
     let parts: Vec<&str> = rest.split('/').collect();
     parts.len() == 2
         && parts.iter().all(|p| !p.is_empty() && *p != "." && *p != ".." && p.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.+%".contains(&b)))
+}
+
+/// 2026-11-15T18:04:00Z and nothing else, so that dates compare as text.
+fn utc_stamp(s: &str) -> bool {
+    s.len() == 20
+        && s.bytes().enumerate().all(|(i, b)| match i {
+            4 | 7 => b == b'-',
+            10 => b == b'T',
+            13 | 16 => b == b':',
+            19 => b == b'Z',
+            _ => b.is_ascii_digit(),
+        })
 }
 
 fn plain_id(s: &str) -> bool {
@@ -325,7 +365,7 @@ pub mod tests {
     }
 
     pub fn app(id: &str, stable: Option<&str>, preview: Option<&str>) -> App {
-        let repo = format!("someone/{id}");
+        let repo = format!("{}/{id}", crate::brand::brand().allowed_owner);
         App {
             id: id.into(),
             name: format!("App {id}"),
@@ -336,7 +376,7 @@ pub mod tests {
             program_file: format!("{id}.exe"),
             quiet_switch: vec!["/P".into()],
             quiet_uninstall_switch: vec!["/S".into()],
-            expected_signer: "Jason Wrench".into(),
+            expected_signer: crate::brand::brand().expected_signer.clone(),
             stable: stable.map(|v| release(&repo, v)),
             preview: preview.map(|v| release(&repo, v)),
             extras: vec![],
@@ -374,9 +414,11 @@ pub mod tests {
             validate(&c).is_err()
         };
         assert!(spoil(&|a| a.stable.as_mut().unwrap().url = "https://example.org/Setup.exe".into()));
-        assert!(spoil(&|a| a.stable.as_mut().unwrap().url = "https://github.com/someone/other/releases/download/v1/Setup.exe".into()));
-        assert!(spoil(&|a| a.stable.as_mut().unwrap().url = "https://github.com/someone/openexplainer/releases/download/v1/../x/Setup.exe".into()));
-        assert!(spoil(&|a| a.stable.as_mut().unwrap().url = "http://github.com/someone/openexplainer/releases/download/v1/Setup.exe".into()));
+        let repo = good.apps[0].repository.clone();
+        let owner = crate::brand::brand().allowed_owner.clone();
+        assert!(spoil(&|a| a.stable.as_mut().unwrap().url = format!("https://github.com/{owner}/other/releases/download/v1/Setup.exe")));
+        assert!(spoil(&|a| a.stable.as_mut().unwrap().url = format!("https://github.com/{repo}/releases/download/v1/../x/Setup.exe")));
+        assert!(spoil(&|a| a.stable.as_mut().unwrap().url = format!("http://github.com/{repo}/releases/download/v1/Setup.exe")));
         assert!(spoil(&|a| a.stable.as_mut().unwrap().sha256 = "xyz".into()));
         assert!(spoil(&|a| a.stable.as_mut().unwrap().version = "0.2.0-alpha.1".into()), "a stable release must not be a preview");
         assert!(spoil(&|a| a.program_file = "..\\cmd.exe".into()));
@@ -401,6 +443,71 @@ pub mod tests {
         let mut web = good.clone();
         web.web.push(WebLink { id: "site".into(), name: "Site".into(), description: String::new(), url: "javascript:alert(1)".into() });
         assert!(validate(&web).is_err());
+    }
+
+    #[test]
+    fn a_catalog_cannot_name_another_owner_or_another_signer() {
+        let refused = |c: &Catalog, what: &str| {
+            let why = validate(c).unwrap_err();
+            assert!(why.contains(what), "{why}");
+        };
+        // Everything else about the app is consistent, as a catalog signed with a stolen key could make it.
+        let mut foreign = catalog(vec![app("x", Some("0.1.1"), None)]);
+        let repo = "someone/x".to_string();
+        foreign.apps[0].repository = repo.clone();
+        foreign.apps[0].stable = Some(release(&repo, "0.1.1"));
+        refused(&foreign, "owner");
+
+        let mut signer = catalog(vec![app("x", Some("0.1.1"), None)]);
+        signer.apps[0].expected_signer = "Someone Else".into();
+        refused(&signer, "signer");
+        signer.apps[0].expected_signer = String::new();
+        refused(&signer, "signer");
+
+        let mut hub = catalog(vec![]);
+        hub.hub = Some(release("someone/hub", "9.9.9"));
+        refused(&hub, "hub");
+
+        // Capitals make no difference on GitHub, so they make none here.
+        let mut capitals = catalog(vec![app("x", Some("0.1.1"), None)]);
+        let repo = format!("{}/x", crate::brand::brand().allowed_owner.to_uppercase());
+        capitals.apps[0].repository = repo.clone();
+        capitals.apps[0].stable = Some(release(&repo, "0.1.1"));
+        capitals.apps[0].expected_signer = crate::brand::brand().expected_signer.to_uppercase();
+        assert_eq!(validate(&capitals), Ok(()));
+    }
+
+    #[test]
+    fn a_catalog_older_than_the_hub_is_refused_and_a_date_must_be_a_date() {
+        let mut c = catalog(vec![]);
+        assert_eq!(check_floor(&c, ""), Ok(()));
+        assert_eq!(check_floor(&c, "2026-11-15T18:04:00Z"), Ok(()), "the very catalog the hub was built with");
+        assert!(check_floor(&c, "2026-11-15T18:04:01Z").is_err());
+        assert!(check_floor(&c, "2027-01-01T00:00:00Z").is_err());
+        for bad in ["2026-11-15 18:04:00Z", "2026-11-15T18:04:00+", "zzzz-zz-zzTzz:zz:zzZ", "2026-11-15T18:04:00ZZ", ""] {
+            c.generated = bad.into();
+            assert!(validate(&c).is_err(), "{bad}");
+        }
+        let floor = &crate::brand::brand().minimum_catalog_date;
+        assert!(utc_stamp(floor), "brand.json's minimumCatalogDate must be a date: {floor}");
+    }
+
+    #[test]
+    fn a_catalog_signed_with_the_backup_key_is_trusted_too_and_no_other() {
+        use ed25519_dalek::{Signer, SigningKey};
+        let engine = base64::engine::general_purpose::STANDARD;
+        let keys: Vec<SigningKey> = [1u8, 2, 3].iter().map(|n| SigningKey::from_bytes(&[*n; 32])).collect();
+        let public: Vec<String> = keys.iter().map(|k| engine.encode(k.verifying_key().to_bytes())).collect();
+        let bytes = br#"{"format":1}"#;
+        let signed_by = |n: usize| engine.encode(keys[n].sign(bytes).to_bytes());
+        let pinned = [public[0].clone(), public[1].clone()];
+        assert_eq!(verify_any(&pinned, bytes, &signed_by(0)), Ok(()), "the hub key");
+        assert_eq!(verify_any(&pinned, bytes, &signed_by(1)), Ok(()), "the backup key");
+        assert!(verify_any(&pinned, bytes, &signed_by(2)).is_err(), "a third key");
+        assert!(verify_any(&pinned[..1], bytes, &signed_by(1)).is_err(), "a backup key this hub was not built with");
+        assert!(verify_any(&[public[0].clone(), "not a key".into()], bytes, &signed_by(0)).is_ok());
+        assert!(verify_any(&[], bytes, &signed_by(0)).unwrap_err().contains("no catalog key"));
+        assert!(verify_any(&pinned, br#"{"format":2}"#, &signed_by(1)).is_err(), "changed bytes");
     }
 
     #[test]

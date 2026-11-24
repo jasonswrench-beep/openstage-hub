@@ -208,7 +208,9 @@ function pretendAll(kind: "update" | "install") {
       case "take_pending_settings":
         return false;
       case "uninstall":
-        throw "The preview does not uninstall anything.";
+        // As the hub says it when the uninstaller Windows lists is not the app's own signed one; Retry asks again.
+        window.setTimeout(() => emit("job", { id: args.id, stage: "failed", received: 0, total: 0, message: "The uninstaller is not signed. It was not run, and nothing was removed." }), 400);
+        return null;
       default:
         return null;
     }

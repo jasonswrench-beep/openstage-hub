@@ -9,7 +9,8 @@
 //   0. with --sign, stops unless everything is committed and HEAD is the commit tagged v<RELEASE> (tools/release-check.mjs), so the release
 //      tag names the exact commit the installer came from; it checks again at the end that the build changed no tracked file;
 //   1. sets tauri.conf.json up for the brand (tools/apply-brand.mjs), and checks that the version in Cargo.toml, tauri.conf.json and package.json is
-//      RELEASE (below), and that the hub key's public half is in the brand's brand.json (a hub without it can trust no catalog);
+//      RELEASE (below), and that the hub key's public half is in the brand's brand.json (a hub without it can trust no catalog). With --sign, the
+//      published catalog must not be older than minimumCatalogDate (tools/catalog-floor.mjs), or hubs built now would refuse it;
 //   2. builds the program and its installer with Tauri, with --remap-path-prefix for the user folder, Rust's folders and this repository,
 //      so no folder name of the building computer is written into the program;
 //   3. checks Tauri's installer script carries the web view's setup inside (never downloaded while installing);
@@ -170,6 +171,10 @@ function main(argv) {
     say("  NOTE: no hub key in the brand's brand.json yet, so this copy will trust no catalog. Fine for trying the window; not for a release.");
   }
   say(`  ${brand.productName}, ${brand.identifier}, version ${RELEASE}`);
+
+  if (sign && run(process.execPath, [join(root, "tools", "catalog-floor.mjs"), "--brand", chosen.id, "--check"], { cwd: root }) !== 0) {
+    fail("the oldest catalog this hub would accept is not right (what is wrong is above).");
+  }
 
   let signConfig = null;
   if (sign) {

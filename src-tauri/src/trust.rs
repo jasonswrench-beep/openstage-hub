@@ -1,15 +1,49 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The two checks every downloaded installer passes before it runs:
 //! 1. its SHA-256 equals the catalog's;
-//! 2. Windows' own signature check (WinVerifyTrust) says its code signature is valid, the signature carries a timestamp, and the signer is the
-//!    one the catalog names (Jason Wrench). The certificate's revocation is checked too.
+//! 2. Windows' own signature check (WinVerifyTrust) says its code signature is valid, the signature carries a timestamp, and the certificate is
+//!    the one the brand file names: the signer's name, parts of its full subject, and the authority that issued it. The certificate's
+//!    revocation is checked too. These come from the program, never from the catalog.
+//!
+//! The file is held open from before its checksum is computed until it has been started (`hold`), so nothing can change or replace it between
+//! the check and the run. An app's uninstaller passes the same signature check before it is run.
 
+use crate::brand::{brand, Brand};
 use sha2::{Digest, Sha256};
+use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+/// Opens a file for reading so that, while it stays open, no other program can write to it, rename it or delete it.
+#[cfg(windows)]
+pub fn hold(path: &Path) -> std::io::Result<File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ: u32 = 1;
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    let mut tries = 0;
+    loop {
+        match std::fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ).open(path) {
+            // A virus scanner may be reading a file that has just been written: give it a moment.
+            Err(e) if e.raw_os_error() == Some(ERROR_SHARING_VIOLATION) && tries < 25 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            other => return other,
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn hold(path: &Path) -> std::io::Result<File> {
+    File::open(path)
+}
+
 pub fn sha256_file(path: &Path) -> std::io::Result<String> {
-    let mut file = std::fs::File::open(path)?;
+    sha256_of(&mut File::open(path)?)
+}
+
+/// The SHA-256 of an open file, read from where it is now.
+pub fn sha256_of(file: &mut File) -> std::io::Result<String> {
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 1024 * 1024];
     loop {
@@ -22,19 +56,40 @@ pub fn sha256_file(path: &Path) -> std::io::Result<String> {
     Ok(hasher.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
+/// Who signed a file, as Windows reads its certificate.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signature {
+    /// The certificate's simple display name.
     pub signer: String,
+    /// The certificate's full subject, in parts: "CN=Jason Wrench", "O=Jason Wrench", "C=US" and so on.
+    pub subject: Vec<String>,
+    /// The name of the authority that issued the certificate.
+    pub issuer: String,
     pub timestamped: bool,
 }
 
-/// The signer's name as Windows reads it (the certificate's simple display name), when the signature is valid; otherwise why not, in words.
+/// Whether the signing certificate's revocation is looked up. It is for anything the hub installs. It is not for an app's uninstaller: that must
+/// work with no network, and a certificate that was revoked after the app was installed is a reason to let the person remove it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Revocation {
+    Checked,
+    NotChecked,
+}
+
+/// Who signed the file, when Windows says the signature is valid; otherwise why not, in words that begin "The <what>".
 #[cfg(windows)]
-pub fn signature(path: &Path) -> Result<Signature, String> {
+pub fn signature(path: &Path, what: &str, revocation: Revocation) -> Result<Signature, String> {
     use windows::core::HSTRING;
     use windows::Win32::Foundation::{HANDLE, HWND};
-    use windows::Win32::Security::Cryptography::{CertGetNameStringW, CERT_NAME_SIMPLE_DISPLAY_TYPE};
+    use windows::Win32::Security::Cryptography::{CertGetNameStringW, CERT_CONTEXT, CERT_NAME_ISSUER_FLAG, CERT_NAME_RDN_TYPE, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_X500_NAME_STR};
     use windows::Win32::Security::WinTrust::*;
+
+    // CERT_NAME_RDN_TYPE gives the whole subject as text, in the form named by its parameter.
+    unsafe fn name_of(cert: *const CERT_CONTEXT, kind: u32, flags: u32, form: Option<*const core::ffi::c_void>) -> String {
+        let mut name = vec![0u16; 1024];
+        let n = CertGetNameStringW(cert, kind, flags, form, Some(&mut name));
+        String::from_utf16_lossy(&name[..(n.saturating_sub(1)) as usize])
+    }
 
     let wide = HSTRING::from(path.as_os_str());
     let mut file = WINTRUST_FILE_INFO {
@@ -46,29 +101,34 @@ pub fn signature(path: &Path) -> Result<Signature, String> {
     let mut data = WINTRUST_DATA {
         cbStruct: std::mem::size_of::<WINTRUST_DATA>() as u32,
         dwUIChoice: WTD_UI_NONE,
-        fdwRevocationChecks: WTD_REVOKE_WHOLECHAIN,
+        fdwRevocationChecks: if revocation == Revocation::Checked { WTD_REVOKE_WHOLECHAIN } else { WTD_REVOKE_NONE },
         dwUnionChoice: WTD_CHOICE_FILE,
         Anonymous: WINTRUST_DATA_0 { pFile: &mut file },
         dwStateAction: WTD_STATEACTION_VERIFY,
-        dwProvFlags: WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT,
+        dwProvFlags: if revocation == Revocation::Checked { WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT } else { WTD_REVOCATION_CHECK_NONE | WTD_CACHE_ONLY_URL_RETRIEVAL },
         ..Default::default()
     };
     let mut action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
     let status = unsafe { WinVerifyTrust(HWND(-1isize as *mut _), &mut action, &mut data as *mut _ as *mut _) };
 
-    let mut found = Err(words_for(status));
+    let mut found = Err(words_for(status, what));
     if status == 0 {
         unsafe {
             let provider = WTHelperProvDataFromStateData(data.hWVTStateData);
             let signer = if provider.is_null() { std::ptr::null_mut() } else { WTHelperGetProvSignerFromChain(provider, 0, false, 0) };
             let cert = if signer.is_null() { std::ptr::null_mut() } else { WTHelperGetProvCertFromChain(signer, 0) };
             found = if cert.is_null() || (*cert).pCert.is_null() {
-                Err("Windows could not read who signed the installer.".into())
+                Err(format!("Windows could not read who signed the {what}."))
             } else {
-                let mut name = vec![0u16; 512];
-                let n = CertGetNameStringW((*cert).pCert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, None, Some(&mut name));
-                let signer_name = String::from_utf16_lossy(&name[..(n.saturating_sub(1)) as usize]);
-                Ok(Signature { signer: signer_name, timestamped: (*signer).csCounterSigners > 0 })
+                let cert = (*cert).pCert;
+                let form = CERT_X500_NAME_STR.0;
+                let subject = name_of(cert, CERT_NAME_RDN_TYPE, 0, Some(&form as *const u32 as *const core::ffi::c_void));
+                Ok(Signature {
+                    signer: name_of(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, None),
+                    subject: subject.split(", ").map(str::to_string).filter(|p| !p.is_empty()).collect(),
+                    issuer: name_of(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG, None),
+                    timestamped: (*signer).csCounterSigners > 0,
+                })
             };
         }
     }
@@ -80,34 +140,53 @@ pub fn signature(path: &Path) -> Result<Signature, String> {
 }
 
 #[cfg(not(windows))]
-pub fn signature(_path: &Path) -> Result<Signature, String> {
+pub fn signature(_path: &Path, _what: &str, _revocation: Revocation) -> Result<Signature, String> {
     Err("The signature check works only on Windows.".into())
 }
 
 #[cfg_attr(not(windows), allow(dead_code))]
-fn words_for(status: i32) -> String {
+fn words_for(status: i32, what: &str) -> String {
     match status as u32 {
-        0x800B0100 => "The installer is not signed.".into(),
-        0x80096010 | 0x80096011 => "The installer's signature does not match its contents; it was changed after it was signed.".into(),
-        0x800B010C => "The certificate that signed the installer has been revoked.".into(),
+        0x800B0100 => format!("The {what} is not signed."),
+        0x80096010 | 0x80096011 => format!("The {what}'s signature does not match its contents; it was changed after it was signed."),
+        0x800B010C => format!("The certificate that signed the {what} has been revoked."),
         0x80092013 | 0x80092012 => "Windows could not check whether the signing certificate was revoked (its revocation list could not be reached).".into(),
-        0x800B0101 => "The installer's signing certificate had run out when it was signed, and the signature has no timestamp.".into(),
-        0x800B0109 | 0x800B010A => "The installer is signed with a certificate Windows does not trust.".into(),
-        0x800B0111 => "Windows is set to not trust this installer's publisher.".into(),
-        other => format!("Windows did not accept the installer's signature (code 0x{other:08X})."),
+        0x800B0101 => format!("The {what}'s signing certificate had run out when it was signed, and the signature has no timestamp."),
+        0x800B0109 | 0x800B010A => format!("The {what} is signed with a certificate Windows does not trust."),
+        0x800B0111 => format!("Windows is set to not trust this {what}'s publisher."),
+        other => format!("Windows did not accept the {what}'s signature (code 0x{other:08X})."),
     }
 }
 
-/// The whole of step 3: valid, timestamped and signed by `expected` (the certificate's name, compared without regard to capitals).
-pub fn check_signed_by(path: &Path, expected: &str) -> Result<(), String> {
-    let found = signature(path)?;
+/// Whether a valid signature is the brand's: timestamped; the signer's name (without regard to capitals); every part of the subject the brand
+/// file names; and an issuing authority the brand file names. A certificate in another person's same name, or from another authority, is refused.
+pub fn check_signature(found: &Signature, b: &Brand, what: &str) -> Result<(), String> {
     if !found.timestamped {
-        return Err("The installer's signature has no timestamp, so it was not trusted.".into());
+        return Err(format!("The {what}'s signature has no timestamp, so it was not trusted."));
     }
-    if !found.signer.trim().eq_ignore_ascii_case(expected.trim()) {
-        return Err(format!("The installer is signed by {}, not by {expected}, so it was not trusted.", found.signer));
+    let expected = b.expected_signer.trim();
+    if !found.signer.trim().eq_ignore_ascii_case(expected) {
+        return Err(format!("The {what} is signed by {}, not by {expected}, so it was not trusted.", found.signer));
+    }
+    let has = |part: &String| found.subject.iter().any(|p| p.trim().eq_ignore_ascii_case(part.trim()));
+    if !b.signer_subject.iter().all(has) {
+        return Err(format!("The {what} is signed by someone with the same name as {expected}, but not the same certificate details, so it was not trusted."));
+    }
+    let from = |start: &String| !start.trim().is_empty() && found.issuer.to_ascii_lowercase().starts_with(&start.to_ascii_lowercase());
+    if !b.signer_issuers.iter().any(from) {
+        return Err(format!("The {what}'s certificate was issued by {}, not by the authority that issues {expected}'s, so it was not trusted.", found.issuer));
     }
     Ok(())
+}
+
+/// The whole of step 3 for something the hub is about to install: valid (revocation looked up) and the brand's own signature.
+pub fn check_installer(path: &Path) -> Result<(), String> {
+    check_signature(&signature(path, "installer", Revocation::Checked)?, brand(), "installer")
+}
+
+/// The same for an app's own uninstaller, without looking up revocation.
+pub fn check_uninstaller(path: &Path) -> Result<(), String> {
+    check_signature(&signature(path, "uninstaller", Revocation::NotChecked)?, brand(), "uninstaller")
 }
 
 #[cfg(test)]
@@ -127,8 +206,9 @@ mod tests {
     fn an_unsigned_file_is_refused_and_a_windows_program_is_signed_by_microsoft() {
         let path = std::env::temp_dir().join(format!("hub-unsigned-{}.exe", std::process::id()));
         std::fs::write(&path, b"MZ not really a program").unwrap();
-        assert!(signature(&path).is_err());
-        assert!(check_signed_by(&path, "Jason Wrench").is_err());
+        assert!(signature(&path, "installer", Revocation::Checked).is_err());
+        assert!(check_installer(&path).is_err());
+        assert!(check_uninstaller(&path).is_err());
         let _ = std::fs::remove_file(&path);
         // A program Windows itself ships is catalog-signed rather than signed inside the file, so it is not a fair test; the suite's apps'
         // own installers are tried in TESTING-TODO.md and in the ignored test below.
@@ -142,10 +222,77 @@ mod tests {
         let file = std::env::var("HUB_SIGNED_FILE").unwrap_or_else(|_| {
             format!("{}\\OpenExplainer\\openexplainer.exe", std::env::var("LOCALAPPDATA").unwrap())
         });
-        let found = signature(Path::new(&file)).unwrap();
-        assert_eq!(found.signer, "Jason Wrench");
+        let found = signature(Path::new(&file), "installer", Revocation::Checked).unwrap();
+        assert_eq!(found.signer, brand().expected_signer);
         assert!(found.timestamped);
-        assert_eq!(check_signed_by(Path::new(&file), "jason wrench"), Ok(()));
-        assert!(check_signed_by(Path::new(&file), "Someone Else").unwrap_err().contains("not by Someone Else"));
+        assert!(brand().signer_subject.iter().all(|p| found.subject.contains(p)), "{:?}", found.subject);
+        assert_eq!(check_installer(Path::new(&file)), Ok(()));
+        assert_eq!(check_uninstaller(Path::new(&file)), Ok(()));
+        let mut other = brand().clone();
+        other.expected_signer = "Someone Else".into();
+        assert!(check_signature(&found, &other, "installer").unwrap_err().contains("not by Someone Else"));
+    }
+
+    fn ours() -> Signature {
+        let b = brand();
+        Signature {
+            signer: b.expected_signer.clone(),
+            subject: b.signer_subject.iter().cloned().chain(["L=Somewhere".to_string()]).collect(),
+            issuer: format!("{}AOC CA 04", b.signer_issuers[0]),
+            timestamped: true,
+        }
+    }
+
+    #[test]
+    fn only_the_brands_own_certificate_is_trusted() {
+        let b = brand();
+        let refused = |change: &dyn Fn(&mut Signature), words: &str| {
+            let mut s = ours();
+            change(&mut s);
+            let why = check_signature(&s, b, "installer").unwrap_err();
+            assert!(why.contains(words), "{why}");
+        };
+        assert_eq!(check_signature(&ours(), b, "installer"), Ok(()));
+        let mut capitals = ours();
+        capitals.signer = capitals.signer.to_uppercase();
+        assert_eq!(check_signature(&capitals, b, "installer"), Ok(()));
+        refused(&|s| s.timestamped = false, "timestamp");
+        refused(&|s| s.signer = "Someone Else".into(), "signed by Someone Else");
+        // Another person with the same name, and a certificate in that name from another authority.
+        refused(&|s| s.subject = vec!["CN=Jason Wrench".into(), "O=Other".into()], "same name");
+        refused(&|s| s.subject.clear(), "same name");
+        refused(&|s| s.issuer = "Some Other CA".into(), "issued by Some Other CA");
+        refused(&|s| s.issuer = format!("Fake {}AOC CA 04", b.signer_issuers[0]), "issued by Fake");
+        refused(&|s| s.issuer.clear(), "issued by");
+        // A brand that names no issuer trusts none.
+        let mut none = b.clone();
+        none.signer_issuers = vec![];
+        assert!(check_signature(&ours(), &none, "installer").is_err());
+        none.signer_issuers = vec![" ".into()];
+        assert!(check_signature(&ours(), &none, "installer").is_err(), "an empty prefix is not any issuer");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_held_file_cannot_be_changed_replaced_or_deleted_until_it_is_let_go() {
+        let dir = std::env::temp_dir().join(format!("hub-hold-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("setup.exe");
+        std::fs::write(&path, b"checked").unwrap();
+        let mut held = hold(&path).unwrap();
+        let sum = sha256_of(&mut held).unwrap();
+        // Everything a same-user program could try between the check and the run.
+        assert!(std::fs::write(&path, b"swapped").is_err(), "overwriting");
+        assert!(std::fs::OpenOptions::new().append(true).open(&path).is_err(), "appending");
+        assert!(std::fs::remove_file(&path).is_err(), "deleting");
+        assert!(std::fs::rename(&path, dir.join("moved.exe")).is_err(), "moving it away");
+        std::fs::write(dir.join("other.exe"), b"swapped").unwrap();
+        assert!(std::fs::rename(dir.join("other.exe"), &path).is_err(), "replacing it");
+        assert!(std::fs::rename(&dir, dir.with_extension("away")).is_err(), "moving its folder away");
+        assert_eq!(sha256_file(&path).unwrap(), sum, "reading it is still allowed, and it is unchanged");
+        drop(held);
+        std::fs::write(&path, b"swapped").unwrap();
+        assert_ne!(sha256_file(&path).unwrap(), sum);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

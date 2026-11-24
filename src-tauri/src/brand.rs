@@ -15,7 +15,21 @@ pub struct Brand {
     pub catalog: CatalogPlace,
     /// The public half of the hub key (32 bytes of Ed25519, in base64). Empty until Make Hub Key.bat has been run.
     pub catalog_public_key: String,
+    /// The public half of a second key, kept offline, whose signature on a catalog is accepted too, so losing the first does not strand
+    /// installed hubs. Empty until the owner has made one.
+    #[serde(default)]
+    pub catalog_backup_key: String,
+    /// The date of the newest catalog published when this hub was built: an older catalog is refused, even on a first run.
+    #[serde(default)]
+    pub minimum_catalog_date: String,
+    /// The only GitHub owner an app may come from, whatever a catalog says.
+    pub allowed_owner: String,
+    /// The only signer an installer or uninstaller may have, whatever a catalog says.
     pub expected_signer: String,
+    /// Parts the signing certificate's full subject must contain ("O=Jason Wrench").
+    pub signer_subject: Vec<String>,
+    /// What the name of the authority that issued the signing certificate must start with.
+    pub signer_issuers: Vec<String>,
     pub sibling: Sibling,
 }
 
@@ -52,6 +66,11 @@ impl Brand {
     pub fn repository_url(&self) -> String {
         format!("https://github.com/{}", self.repository)
     }
+
+    /// Whether a repository (owner/name) belongs to the one owner this hub takes apps from.
+    pub fn owns(&self, repository: &str) -> bool {
+        repository.split_once('/').is_some_and(|(owner, _)| !owner.is_empty() && owner.eq_ignore_ascii_case(&self.allowed_owner))
+    }
 }
 
 /// This hub's own version (from Cargo.toml, which tools/build-installer.mjs keeps equal to the release).
@@ -68,5 +87,17 @@ mod tests {
         assert!(b.catalog_url().starts_with("https://github.com/"));
         assert!(b.catalog_url().ends_with(&b.catalog.file));
         assert!(b.sibling.url.starts_with("https://"));
+    }
+
+    #[test]
+    fn the_trust_anchors_are_in_the_brand_file_and_the_hub_is_in_its_own_owners_repository() {
+        let b = brand();
+        assert!(!b.allowed_owner.is_empty() && !b.expected_signer.is_empty());
+        assert!(!b.signer_issuers.is_empty() && b.signer_issuers.iter().all(|i| i.len() > 5), "an empty prefix would allow any issuer");
+        assert!(b.signer_subject.iter().all(|p| p.contains('=')));
+        assert!(b.owns(&b.repository));
+        assert!(b.owns(&format!("{}/x", b.allowed_owner.to_uppercase())), "capitals do not matter, as on GitHub");
+        assert!(!b.owns("someone/x") && !b.owns("") && !b.owns("/x") && !b.owns(&b.allowed_owner));
+        assert!(!b.owns(&format!("{}x/y", b.allowed_owner)));
     }
 }
