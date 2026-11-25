@@ -38,7 +38,7 @@ On 2026-11-24, the fixes from the security review of 2026-11-17 (not released; c
 - On 2026-11-25 you ran the hub's self-update trial on your own hub (the published 1.0.1 setup taken as newer, started by the new code with `/P /R /UPDATE`), with the hub closed and with it open: the setup ran, the hub started again by itself, and its version, settings, installed-app records and shortcuts were kept. Not shown by it: that a Start with Windows entry is kept (it was off), an update to a higher number, or 1.0.2's own installer.
 - All twelve `/P` apps are built with the same installer maker. In the eight whose generated installer script is on your PC, `/UPDATE` is read and skips the old uninstaller; the other four (Author, OpenAssess, PrismQDA, PrismStatistics) have no template of their own.
 
-- On 2026-11-25 the build was given a search for development switches. Tried on two optimized programs made from this code: the ordinary one has none; one built with debug assertions on is stopped (it names the three `HUB_` switches). The published 1.0.1 setup's programs have none. Not tried: a whole signed build, which waits for the release tag.
+- On 2026-11-25 the build was given a search for development switches. Tried on two optimized programs made from this code: the ordinary one has none; one built with debug assertions on is stopped (it names the three `HUB_` switches). The published 1.0.1 setup's programs have none. The build also runs the tests first and stops if one fails. Not tried: a whole signed build, which waits for the release tag.
 
 For you, when you choose (owner steps from the review): rewrap each hub key with a 20+ character password, and make each hub's offline backup key (`docs/releasing.md`).
 

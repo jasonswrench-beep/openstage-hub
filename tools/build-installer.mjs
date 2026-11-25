@@ -9,8 +9,9 @@
 //   0. with --sign, stops unless everything is committed and HEAD is the commit tagged v<RELEASE> (tools/release-check.mjs), so the release
 //      tag names the exact commit the installer came from; it checks again at the end that the build changed no tracked file;
 //   1. sets tauri.conf.json up for the brand (tools/apply-brand.mjs), and checks that the version in Cargo.toml, tauri.conf.json and package.json is
-//      RELEASE (below), and that the hub key's public half is in the brand's brand.json (a hub without it can trust no catalog). With --sign, the
-//      published catalog must not be older than minimumCatalogDate (tools/catalog-floor.mjs), or hubs built now would refuse it;
+//      RELEASE (below), and that the hub key's public half is in the brand's brand.json (a hub without it can trust no catalog). Runs the tests
+//      (tools/run-tests.mjs: what npm test runs) and stops if one fails. With --sign, the published catalog must not be older than
+//      minimumCatalogDate (tools/catalog-floor.mjs), or hubs built now would refuse it;
 //   2. builds the program and its installer with Tauri, with --remap-path-prefix for the user folder, Rust's folders and this repository,
 //      so no folder name of the building computer is written into the program;
 //   3. checks Tauri's installer script carries the web view's setup inside (never downloaded while installing);
@@ -30,6 +31,7 @@ import { applyBrand } from "./apply-brand.mjs";
 import { loadBrand } from "./brand.mjs";
 import { namingDevSwitches } from "./dev-switches.mjs";
 import { gitState, releaseProblems } from "./release-check.mjs";
+import { testsProblem } from "./run-tests.mjs";
 import { signatureOf, signatureProblem } from "./signature.mjs";
 
 /** The release this build is. Raise it for every release; the hub compares it with the catalog's hub entry. Tags are v<RELEASE>. */
@@ -182,7 +184,7 @@ function main(argv) {
     say(`  everything is committed, and HEAD is the commit tagged v${RELEASE}`);
   }
 
-  say("1. The brand and the version.");
+  say("1. The brand, the version and the tests.");
   applyBrand({ id: chosen.id });
   const v = versionsMatch();
   if (!v.ok) fail(`the version must be ${RELEASE} everywhere: tauri.conf.json says ${v.conf}, package.json ${v.pkg}, Cargo.toml ${v.cargo}.`);
@@ -191,6 +193,9 @@ function main(argv) {
     say("  NOTE: no hub key in the brand's brand.json yet, so this copy will trust no catalog. Fine for trying the window; not for a release.");
   }
   say(`  ${brand.productName}, ${brand.identifier}, version ${RELEASE}`);
+  const problem = testsProblem(join(root, "tests"));
+  if (problem) fail(problem);
+  say("  the tests pass");
 
   if (sign && run(process.execPath, [join(root, "tools", "catalog-floor.mjs"), "--brand", chosen.id, "--check"], { cwd: root }) !== 0) {
     fail("the oldest catalog this hub would accept is not right (what is wrong is above).");

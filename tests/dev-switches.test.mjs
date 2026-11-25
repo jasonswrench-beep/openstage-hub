@@ -2,7 +2,7 @@
 // node --test tests/*.test.mjs
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,13 +10,17 @@ import { DEV_SWITCHES, devSwitchesIn, namingDevSwitches } from "../tools/dev-swi
 
 const source = join(dirname(fileURLToPath(import.meta.url)), "..", "src-tauri", "src");
 
+/** Every Rust file of the program, in subfolders too, as [name in the source folder, text]. */
+function rustFiles(folder = source) {
+  return readdirSync(folder, { recursive: true }).filter((n) => n.endsWith(".rs")).sort().map((n) => [n, readFileSync(join(folder, n), "utf8")]);
+}
+
 /** Read by every build (--tray), or only by a test that is never part of the program (HUB_SIGNED_FILE). */
 const NOT_DEVELOPMENT = ["--tray", "HUB_SIGNED_FILE"];
 
 test("every development switch in the program's code is searched for", () => {
   const inCode = new Set();
-  for (const name of readdirSync(source).filter((n) => n.endsWith(".rs"))) {
-    const text = readFileSync(join(source, name), "utf8");
+  for (const [, text] of rustFiles()) {
     for (const [, found] of text.matchAll(/\bvar(?:_os)?\(\s*"(HUB_[A-Z0-9_]+)"/g)) inCode.add(found);
     for (const [, found] of text.matchAll(/[=!]=\s*"(--[a-z][a-z-]*)"/g)) inCode.add(found);
   }
@@ -26,8 +30,8 @@ test("every development switch in the program's code is searched for", () => {
 
 test("every development switch is compiled into development builds only", () => {
   const guarded = new Set();
-  for (const name of readdirSync(source).filter((n) => n.endsWith(".rs"))) {
-    const lines = readFileSync(join(source, name), "utf8").split(/\r?\n/);
+  for (const [name, text] of rustFiles()) {
+    const lines = text.split(/\r?\n/);
     lines.forEach((line, i) => {
       for (const s of DEV_SWITCHES.filter((s) => line.includes(`"${s}"`))) {
         if (lines[i - 1].trim() === "#[cfg(debug_assertions)]") guarded.add(s);
@@ -37,6 +41,16 @@ test("every development switch is compiled into development builds only", () => 
   }
   // Read inside the --update-hub block rather than directly under the line; a program that has it is stopped by the search of the built file.
   assert.deepEqual([...guarded].sort(), DEV_SWITCHES.filter((s) => s !== "HUB_REAL_LOCALAPPDATA").sort());
+});
+
+test("the code is read in subfolders too", (t) => {
+  const folder = mkdtempSync(join(tmpdir(), "hub-rust-files-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  mkdirSync(join(folder, "a", "b"), { recursive: true });
+  writeFileSync(join(folder, "lib.rs"), "one");
+  writeFileSync(join(folder, "a", "b", "deep.rs"), "two");
+  writeFileSync(join(folder, "a", "notes.txt"), "three");
+  assert.deepEqual(rustFiles(folder), [[join("a", "b", "deep.rs"), "two"], ["lib.rs", "one"]]);
 });
 
 test("a program that carries a development switch is named, and one that does not is not", (t) => {
