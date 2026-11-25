@@ -125,7 +125,7 @@ pub fn signature(path: &Path, what: &str, revocation: Revocation) -> Result<Sign
                 let subject = name_of(cert, CERT_NAME_RDN_TYPE, 0, Some(&form as *const u32 as *const core::ffi::c_void));
                 Ok(Signature {
                     signer: name_of(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, None),
-                    subject: subject.split(", ").map(str::to_string).filter(|p| !p.is_empty()).collect(),
+                    subject: subject_parts(&subject),
                     issuer: name_of(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG, None),
                     timestamped: (*signer).csCounterSigners > 0,
                 })
@@ -142,6 +142,27 @@ pub fn signature(path: &Path, what: &str, revocation: Revocation) -> Result<Sign
 #[cfg(not(windows))]
 pub fn signature(_path: &Path, _what: &str, _revocation: Revocation) -> Result<Signature, String> {
     Err("The signature check works only on Windows.".into())
+}
+
+/// A certificate's full subject, as Windows writes it out, in its parts. A value that holds a comma is written in quotes ("O=\"A, B\"", with a
+/// quote inside it doubled), so it stays one part and cannot pass for several.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn subject_parts(text: &str) -> Vec<String> {
+    let mut parts = vec![String::new()];
+    let mut quoted = false;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' if quoted && chars.peek() == Some(&'"') => {
+                chars.next();
+                parts.last_mut().unwrap().push('"');
+            }
+            '"' => quoted = !quoted,
+            ',' | '+' | ';' if !quoted => parts.push(String::new()),
+            other => parts.last_mut().unwrap().push(other),
+        }
+    }
+    parts.into_iter().map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect()
 }
 
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -241,6 +262,18 @@ mod tests {
             issuer: format!("{}AOC CA 04", b.signer_issuers[0]),
             timestamped: true,
         }
+    }
+
+    #[test]
+    fn a_subject_value_in_quotes_stays_one_part() {
+        assert_eq!(subject_parts("C=US, S=ny, O=Jason Wrench, CN=Jason Wrench"), ["C=US", "S=ny", "O=Jason Wrench", "CN=Jason Wrench"]);
+        // Values made to look like other parts once split without regard to the quotes.
+        assert_eq!(subject_parts(r#"CN=Jason Wrench, OU="x, O=Jason Wrench, C=US, y", C=GB"#), ["CN=Jason Wrench", "OU=x, O=Jason Wrench, C=US, y", "C=GB"]);
+        assert_eq!(subject_parts(r#"OU="say ""hi"", O=Jason Wrench", CN=a + T=b"#), [r#"OU=say "hi", O=Jason Wrench"#, "CN=a", "T=b"]);
+        assert!(subject_parts("").is_empty());
+        let mut sly = ours();
+        sly.subject = subject_parts(r#"CN=Jason Wrench, OU="x, O=Jason Wrench, C=US, y", C=GB"#);
+        assert!(check_signature(&sly, brand(), "installer").is_err());
     }
 
     #[test]

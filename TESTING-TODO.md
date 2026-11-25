@@ -29,7 +29,7 @@ On 2026-11-17, Update all and Install all (not released; comes with 1.0.2):
 
 On 2026-11-24, the fixes from the security review of 2026-11-17 (not released; come with 1.0.2):
 
-- `npm test` (14 tests) passes; `cargo test` passes 33 tests for each hub. With the real published catalogs and keys, both hubs read them as before (9 OpenStage apps, 5 Prism apps). Copies signed with a test key that name another owner, another signer or an older date are refused by both.
+- `npm test` (14 tests) passes; `cargo test` passes 37 tests for each hub (after the recheck of 2026-11-25: one installer at a time, the hub never updating itself during another job, and an uninstaller only from the app's own folder with the catalog's switches). With the real published catalogs and keys, both hubs read them as before (9 OpenStage apps, 5 Prism apps). Copies signed with a test key that name another owner, another signer or an older date are refused by both.
 - All twelve suite uninstallers on your PC are validly signed, timestamped, with one and the same subject, issued by a "Microsoft ID Verified CS" authority; on 2026-11-25 the hub's own new check was run on each of the twelve and on OpenExplainer's program, and all passed (they were read, not run).
 - The key tools were tried on throwaway keys in a copy of the repository, never on the hub keys.
 
@@ -100,6 +100,7 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 - [ ] Update all with two or more updates and one app open: the closed apps update one after another, then the open one waits with "Close ... to continue". The notice reads "Updating 1 of 3: ..." throughout, and the status line ends with "All 3 apps updated."
 - [ ] Update all with a newer hub in the catalog (after 1.0.3 exists): the apps first, then the hub closes, updates and restarts.
 - [ ] Install all on a clean account: it asks first (naming the apps and the download size), then installs them one after another. Stop part way: the app being downloaded is cancelled and the rest are left.
+- [ ] During Update all, press Install on another app: it downloads, says it waits for another installer to finish, and installs after. Uninstall and Reinstall of an app waiting its turn are greyed out until Stop. While a row's own install is running, the hub does not update itself.
 - [ ] Close the window to the tray during Update all: it carries on; reopening the window shows how far it has got.
 - [ ] Cancel while downloading: nothing is installed and the download folder (`%LOCALAPPDATA%\org.openstage.hub\downloads`, or `org.prismopenresearch.hub` for Prism Hub) is empty.
 - [ ] Unplug the network part way through a download: a plain sentence and Retry.

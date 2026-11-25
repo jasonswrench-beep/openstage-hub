@@ -17,6 +17,7 @@ use serde::Serialize;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -105,6 +106,40 @@ fn wait_until_closed(app: &App, folder: Option<&Path>, cancel: &AtomicBool, repo
     true
 }
 
+/// Waits until no other installer or uninstaller is running, and takes the turn. Nothing when the person cancelled first. `waiting` is called
+/// once, if there is a wait.
+fn wait_turn<'a>(installer: &'a Mutex<()>, cancel: &AtomicBool, waiting: &dyn Fn()) -> Option<MutexGuard<'a, ()>> {
+    let mut said = false;
+    loop {
+        match installer.try_lock() {
+            Ok(turn) => return Some(turn),
+            Err(TryLockError::Poisoned(turn)) => return Some(turn.into_inner()),
+            Err(TryLockError::WouldBlock) => {}
+        }
+        if cancel.load(Ordering::Relaxed) {
+            return None;
+        }
+        if !said {
+            waiting();
+            said = true;
+        }
+        std::thread::sleep(Duration::from_millis(300));
+    }
+}
+
+/// Waits until the app is closed and it is this job's turn. The turn is never held while waiting for the person to close an app.
+fn closed_and_my_turn<'a>(hub: &'a Hub, app: &App, folder: Option<&Path>, cancel: &AtomicBool, report: Report) -> Option<MutexGuard<'a, ()>> {
+    loop {
+        if !wait_until_closed(app, folder, cancel, report) {
+            return None;
+        }
+        let turn = wait_turn(&hub.installer, cancel, &|| report(event(&app.id, "waiting", "Waiting for another installer to finish.")))?;
+        if !folder.is_some_and(|f| system::is_running(f, &app.program_file)) {
+            return Some(turn);
+        }
+    }
+}
+
 /// Starts a held program, then lets it go: once it has started, Windows itself keeps the running file from being changed.
 fn start_held(program: &Path, args: &[String], held: File) -> Result<std::process::Child, String> {
     let mut command = std::process::Command::new(program);
@@ -136,9 +171,9 @@ pub fn install(hub: &Hub, app: &App, release: &Release, cancel: &AtomicBool, rep
     let result = (|| {
         let before = system::installed_apps();
         let folder = system::find_installed(&before, &app.installed_as).and_then(|e| e.folder());
-        if !wait_until_closed(app, folder.as_deref(), cancel, report) {
+        let Some(_turn) = closed_and_my_turn(hub, app, folder.as_deref(), cancel, report) else {
             return Err("Cancelled. Nothing was installed.".to_string());
-        }
+        };
         report(event(&app.id, "installing", "Installing"));
         let code = run_and_wait(&file, &app.quiet_switch, held)?;
         if code != 0 {
@@ -198,21 +233,11 @@ pub fn download_extra(app: &App, index: usize, cancel: &AtomicBool, report: Repo
 pub fn uninstall(hub: &Hub, app: &App, cancel: &AtomicBool, report: Report) -> Result<(), String> {
     let list = system::installed_apps();
     let entry = system::find_installed(&list, &app.installed_as).ok_or(format!("Windows does not list {} as installed.", app.name))?;
-    if !wait_until_closed(app, entry.folder().as_deref(), cancel, report) {
+    let Some(_turn) = closed_and_my_turn(hub, app, entry.folder().as_deref(), cancel, report) else {
         return Err("Cancelled. Nothing was removed.".into());
-    }
-    let (program, args) = if !entry.quiet_uninstall_string.trim().is_empty() {
-        system::split_command(&entry.quiet_uninstall_string).ok_or("The uninstaller Windows lists could not be read.")?
-    } else {
-        let (p, mut a) = system::split_command(&entry.uninstall_string).ok_or("The uninstaller Windows lists could not be read.")?;
-        a.extend(app.quiet_uninstall_switch.iter().cloned());
-        (p, a)
     };
-    if !program.is_file() {
-        return Err("The uninstaller Windows lists is not there any more.".into());
-    }
-    let held = match trusted_uninstaller(&program) {
-        Ok(held) => held,
+    let (program, held) = match listed_uninstaller(entry).and_then(|p| trusted_uninstaller(&p).map(|held| (p, held))) {
+        Ok(found) => found,
         Err(why) => {
             // Windows' own list can be changed by any program the person runs, so a program it names is not simply run. The person can still
             // remove the app from its folder or from Windows' Settings.
@@ -222,7 +247,8 @@ pub fn uninstall(hub: &Hub, app: &App, cancel: &AtomicBool, report: Report) -> R
         }
     };
     report(event(&app.id, "removing", "Removing"));
-    let code = run_and_wait(&program, &args, held)?;
+    // The switches are the signed catalog's, never the list's.
+    let code = run_and_wait(&program, &app.quiet_uninstall_switch, held)?;
     if code != 0 {
         return Err(format!("The uninstaller stopped with an error (code {code})."));
     }
@@ -238,6 +264,23 @@ pub fn uninstall(hub: &Hub, app: &App, cancel: &AtomicBool, report: Report) -> R
         std::thread::sleep(Duration::from_millis(700));
     }
     Err(format!("The uninstaller finished, but Windows still lists {}.", app.name))
+}
+
+/// The uninstaller Windows lists for an app: a program named like an uninstaller (uninstall.exe, unins000.exe), directly in the app's own
+/// install folder. Only which program it is comes from the list; what follows it there is not used.
+fn listed_uninstaller(entry: &system::Installed) -> Result<PathBuf, String> {
+    let listed = [&entry.quiet_uninstall_string, &entry.uninstall_string].into_iter().find(|s| !s.trim().is_empty()).ok_or("Windows lists no uninstaller.")?;
+    let (program, _) = system::split_command(listed).ok_or("The uninstaller Windows lists could not be read.")?;
+    if !program.is_file() {
+        return Err("The uninstaller Windows lists is not there any more.".into());
+    }
+    let place = |p: Option<&Path>| p.and_then(|p| std::fs::canonicalize(p).ok());
+    let folder = place(entry.folder().as_deref());
+    let named = program.file_name().is_some_and(|n| n.to_string_lossy().to_ascii_lowercase().starts_with("unins"));
+    if !named || folder.is_none() || place(program.parent()) != folder {
+        return Err("The uninstaller Windows lists is not the one in the app's own folder.".into());
+    }
+    Ok(program)
 }
 
 /// An app's uninstaller, held open once its signature has been checked, or why it is not trusted.
@@ -287,6 +330,72 @@ mod tests {
     }
 
     #[test]
+    fn only_an_uninstaller_in_the_apps_own_folder_is_taken_from_the_list() {
+        let dir = folder("hub-listed");
+        let app = dir.join("App x");
+        std::fs::create_dir_all(app.join("inner")).unwrap();
+        for f in ["App x/uninstall.exe", "App x/unins000.exe", "App x/app-x.exe", "App x/inner/uninstall.exe", "uninstall.exe"] {
+            std::fs::write(dir.join(f), b"MZ").unwrap();
+        }
+        let entry = |quiet: String, plain: String, at: Option<PathBuf>| system::Installed { install_location: at, uninstall_string: plain, quiet_uninstall_string: quiet, ..Default::default() };
+        let quoted = |p: PathBuf| format!("\"{}\"", p.display());
+        let home = || Some(app.clone());
+        // As the suite's installers write them: the NSIS ones, and Inno's with its own quiet string and a folder that ends in a backslash.
+        assert_eq!(listed_uninstaller(&entry(String::new(), quoted(app.join("uninstall.exe")), home())), Ok(app.join("uninstall.exe")));
+        let inno = entry(format!("{} /SILENT", quoted(app.join("unins000.exe"))), quoted(app.join("unins000.exe")), Some(PathBuf::from(format!("{}\\", app.display()))));
+        assert_eq!(listed_uninstaller(&inno), Ok(app.join("unins000.exe")));
+        // A genuine program of the suite, but not this app's uninstaller; another folder's; one reached through the folder; and none.
+        for other in [app.join("app-x.exe"), dir.join("uninstall.exe"), app.join("inner").join("uninstall.exe"), app.join("..").join("uninstall.exe"), app.join("gone.exe")] {
+            assert!(listed_uninstaller(&entry(String::new(), quoted(other.clone()), home())).is_err(), "{}", other.display());
+        }
+        assert!(listed_uninstaller(&entry(String::new(), String::new(), home())).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Reads this computer's installed apps (it runs nothing): cargo test -- --ignored --nocapture
+    #[test]
+    #[ignore = "reads this computer's installed apps"]
+    fn every_installed_suite_apps_own_uninstaller_is_accepted() {
+        let mut found = 0;
+        for entry in system::installed_apps() {
+            let Some((program, _)) = system::split_command(&entry.uninstall_string) else { continue };
+            if !program.is_file() || trust::check_uninstaller(&program).is_err() {
+                continue;
+            }
+            found += 1;
+            let taken = listed_uninstaller(&entry);
+            println!("{} {:?}", entry.display_name, taken.is_ok());
+            assert!(taken.is_ok_and(|p| trusted_uninstaller(&p).is_ok()), "{}", entry.display_name);
+        }
+        assert!(found > 0, "no app of the brand's signer is installed here");
+    }
+
+    #[test]
+    fn one_installer_runs_at_a_time_and_a_waiting_one_can_be_cancelled() {
+        let installer = Mutex::new(());
+        let running = std::sync::atomic::AtomicUsize::new(0);
+        let most = std::sync::atomic::AtomicUsize::new(0);
+        let waited = std::sync::atomic::AtomicUsize::new(0);
+        let never = AtomicBool::new(false);
+        std::thread::scope(|s| {
+            for _ in 0..3 {
+                s.spawn(|| {
+                    let turn = wait_turn(&installer, &never, &|| { waited.fetch_add(1, Ordering::SeqCst); });
+                    assert!(turn.is_some());
+                    most.fetch_max(running.fetch_add(1, Ordering::SeqCst) + 1, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(120));
+                    running.fetch_sub(1, Ordering::SeqCst);
+                });
+            }
+        });
+        assert_eq!(most.load(Ordering::SeqCst), 1);
+        assert!(waited.load(Ordering::SeqCst) <= 3, "each says once that it waits");
+        let _busy = installer.lock().unwrap();
+        let cancelled = AtomicBool::new(true);
+        assert!(wait_turn(&installer, &cancelled, &|| {}).is_none());
+    }
+
+    #[test]
     fn an_unsigned_stand_in_uninstaller_is_refused_and_let_go() {
         let dir = folder("hub-uninstaller");
         let file = dir.join("uninstall.exe");
@@ -310,7 +419,16 @@ mod tests {
             assert!(std::fs::write(&program, b"swapped").is_err(), "held until it has started");
             let code = run_and_wait(&program, &["/upn".into()], held);
             assert!(code.is_ok(), "{name}: {code:?}");
-            std::fs::remove_dir_all(&dir).expect("let go once it has ended");
+            // Windows can refuse to delete a program for a moment after it has ended. A file still held would never be let go.
+            let mut gone = std::fs::remove_dir_all(&dir);
+            for _ in 0..50 {
+                if gone.is_ok() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+                gone = std::fs::remove_dir_all(&dir);
+            }
+            gone.expect("let go once it has ended");
         }
         assert_eq!(hub_setup_switches(), ["/P", "/R"], "quiet, and start the hub again");
     }

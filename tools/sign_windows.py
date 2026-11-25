@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Signs Windows program files with Azure Artifact Signing, and timestamps every signature.
+"""Signs Windows program files with a cloud signing service, and timestamps every signature.
 
   python tools/sign_windows.py FILE...              sign each file that is not signed yet, then check it
   python tools/sign_windows.py --description TEXT FILE...   the same, with the program name written into the signature
@@ -13,20 +13,20 @@ The same file is used by each OpenStage tool's installer build: for the programs
 bundle.windows.signCommand or Inno Setup's SignTool, for the program itself, the installer's plugins, the uninstaller and the setup file.
 In OpenStage Author, tools/build_installer.py --sign does all of that; in OpenExplainer, tools/build-installer.mjs --sign.
 
-Why the timestamp is not optional: an Artifact Signing certificate is valid for three days. A signature without a timestamp stops validating when its
+Why the timestamp is not optional: a certificate from the signing service is valid for three days. A signature without a timestamp stops validating when its
 certificate runs out, so a file is only counted as signed here when its signature is valid AND timestamped.
 
 The account details come from environment variables, so they never go into the repository:
-  OPENSTAGE_SIGN_ENDPOINT   the account's regional address, for example https://eus.codesigning.azure.net/
-  OPENSTAGE_SIGN_ACCOUNT    the Artifact Signing account's name
+  OPENSTAGE_SIGN_ENDPOINT   the account's regional address, as its settings page shows it
+  OPENSTAGE_SIGN_ACCOUNT    the signing account's name
   OPENSTAGE_SIGN_PROFILE    the certificate profile's name (a Public Trust profile)
   OPENSTAGE_SIGN_PUBLISHER  optional: the name the signature must show (the verified identity); a file signed by anyone else fails the check
-  OPENSTAGE_SIGN_DLIB       optional: Microsoft's Azure.CodeSigning.Dlib.dll (x64), from the NuGet package Microsoft.ArtifactSigning.Client;
-                            by default <your folder>\\Tools\\artifact-signing\\bin\\x64\\Azure.CodeSigning.Dlib.dll
+  OPENSTAGE_SIGN_DLIB       optional: the signing service's client library (x64); by default the one under <your folder>/Tools
+                            (find_dlib, below, has its full place)
   OPENSTAGE_SIGNTOOL        optional: signtool.exe (x64); by default the newest one in the Windows SDK, 10.0.22621 or later
   OPENSTAGE_SIGN_DRY_RUN=1  print the commands instead of running them, and check nothing (for tests)
 
-Signing in: Microsoft's signing library finds the sign-in itself (Azure's DefaultAzureCredential). On a person's own computer that is `az login`,
+Signing in: the signing library finds the sign-in itself. On a person's own computer that is `az login`,
 once; nothing secret is stored by this script.
 """
 
@@ -41,7 +41,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 # dist/ is not in the repository. A tool whose dist/ is its own build output (OpenExplainer) names another place in OPENSTAGE_SIGN_METADATA.
 METADATA = Path(os.environ["OPENSTAGE_SIGN_METADATA"]) if os.environ.get("OPENSTAGE_SIGN_METADATA") else ROOT / "dist" / "signing" / "metadata.json"
-TIMESTAMP_URL = "http://timestamp.acs.microsoft.com"  # Microsoft's RFC 3161 timestamp service for Artifact Signing
+TIMESTAMP_URL = "http://timestamp.acs.microsoft.com"  # the signing service's RFC 3161 timestamp service
 SDK_BIN = Path(r"C:\Program Files (x86)\Windows Kits\10\bin")
 LOWEST_SDK = (10, 0, 22621)  # Microsoft asks for SignTool 10.0.22621.755 or later with its signing library
 REFUSED_SDK = (10, 0, 20348)  # "20348 Windows SDK version isn't supported with our dlib" (Microsoft's page)
@@ -64,9 +64,9 @@ def settings():
     found = {key: os.environ.get(var, "").strip() for key, var in names.items()}
     missing = [names[key] for key, value in found.items() if not value]
     if missing:
-        raise SignError("these are not set: " + ", ".join(missing) + ". They name the Artifact Signing account (see the top of tools/sign_windows.py).")
+        raise SignError("these are not set: " + ", ".join(missing) + ". They name the signing account (see the top of tools/sign_windows.py).")
     if not re.fullmatch(r"https://[a-z0-9]+\.codesigning\.azure\.net/?", found["Endpoint"]):
-        raise SignError(f"OPENSTAGE_SIGN_ENDPOINT should look like https://eus.codesigning.azure.net/ (it is {found['Endpoint']!r}).")
+        raise SignError(f"OPENSTAGE_SIGN_ENDPOINT should be the signing account's regional address (it is {found['Endpoint']!r}).")
     return found
 
 
@@ -105,7 +105,7 @@ def find_dlib():
     chosen = os.environ.get("OPENSTAGE_SIGN_DLIB")
     path = Path(chosen) if chosen else Path.home() / "Tools" / "artifact-signing" / "bin" / "x64" / "Azure.CodeSigning.Dlib.dll"
     if not path.is_file():
-        raise SignError(f"Microsoft's signing library is not at {path}. It comes in the NuGet package Microsoft.ArtifactSigning.Client (bin\\x64); "
+        raise SignError(f"the signing library is not at {path}. It comes in the signing service's NuGet client package (bin\\x64); "
                         "set OPENSTAGE_SIGN_DLIB if it is somewhere else.")
     return path
 
@@ -214,7 +214,7 @@ def sign_one(path, signtool, dlib, metadata, description=None, publisher=None):
 
 
 def ready():
-    """Everything signing needs, each with whether it is here. Signs nothing and asks Azure nothing."""
+    """Everything signing needs, each with whether it is here. Signs nothing and asks the signing service nothing."""
     lines, ok = [], True
 
     def note(good, text):

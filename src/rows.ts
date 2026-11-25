@@ -93,7 +93,7 @@ function previewTag(): HTMLElement {
 const BUSY_WORDS: Record<string, string> = {
   downloading: "Downloading",
   checking: "Checking",
-  waiting: "Waiting for you to close it",
+  waiting: "Waiting",
   installing: "Installing",
   removing: "Removing",
 };
@@ -220,7 +220,8 @@ function moreMenu(a: AppView, s: RowState, act: RowActions): HTMLElement[] {
   menu.hidden = true;
   button.setAttribute("aria-controls", menu.id);
 
-  const busy = !!s.job;
+  // An app waiting its turn in a batch is not removed or reinstalled meanwhile (Stop comes first).
+  const busy = !!s.job || s.queued;
   const entries: [string, string, boolean][] = [];
   const installed = !!a.installed;
   if (installed) entries.push(["open", `Open`, a.installed!.folderKnown]);

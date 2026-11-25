@@ -38,9 +38,11 @@ Cancel works while downloading, checking or waiting; not while the installer its
 
 When any installed app has an update, a notice at the top says how many ("3 updates available, including the hub") with one **Update all** button (just **Update**, naming the app, when there is one). When two or more apps are not installed yet, **Install all** sits beside the Desktop heading; it first asks, naming the apps and how much they download in all, with "Not now" first.
 
-Both do the apps one after another, never two installers at once, each with the six steps above and its own progress in its row (`commands::start_all`). Apps open at the time go last, so the others are done while the person keeps working; each then waits to be closed, as an update on its own does. The rows waiting their turn say so and have no button. The notice shows which step is running ("Updating 2 of 4: OpenAssess") and a **Stop** button, which cancels the app being done (unless its installer is already running) and the rest. An app that fails does not stop the others: its row says why with Retry, and the status line ends with a sentence naming what was not done.
+Both do the apps one after another, each with the six steps above and its own progress in its row (`commands::start_all`). Apps open at the time go last, so the others are done while the person keeps working; each then waits to be closed, as an update on its own does. The rows waiting their turn say so and have no button. The notice shows which step is running ("Updating 2 of 4: OpenAssess") and a **Stop** button, which cancels the app being done (unless its installer is already running) and the rest. An app that fails does not stop the others: its row says why with Retry, and the status line ends with a sentence naming what was not done.
 
-Update all updates the hub itself last, because that closes and restarts it, and only when every app worked; otherwise the hub's own Update button stays, so the person sees what went wrong first. The batch runs in the hub, not the window, so closing the window to the tray does not stop it.
+Update all updates the hub itself last, because that closes and restarts it, and only when every app worked; otherwise the hub's own Update button stays, so the person sees what went wrong first. It also does not start while any other job (a row's own install, download or uninstall) is still running, and once it has started no other job can. The batch runs in the hub, not the window, so closing the window to the tray does not stop it.
+
+However they were started, only one installer or uninstaller runs at a time in the hub: another that is ready says "Waiting for another installer to finish" and can be cancelled. An app waiting its turn in a batch cannot be reinstalled or uninstalled until Stop is pressed, and one that is gone or already done when its turn comes is left as it is.
 
 ### Which version is installed
 
@@ -52,7 +54,7 @@ Open runs the program file (from the catalog) in the install folder Windows reco
 
 ## Uninstalling
 
-Runs the uninstaller Windows lists, without its questions (its `QuietUninstallString`, or its `UninstallString` with the catalog's quiet uninstall switch), after a confirmation saying the app's documents and projects stay where they are. Before it runs, the uninstaller must carry the same signature an installer must (without looking up revocation, so that uninstalling works offline and a revoked app can still be removed). Any program the person runs can change Windows' per-user list, so one that is not the app's own signed uninstaller is not run: the hub says so and opens the app's folder. The hub then watches Windows' list until the app is gone.
+Runs the uninstaller Windows lists, without its questions (with the signed catalog's quiet uninstall switches; none are taken from Windows' list), after a confirmation saying the app's documents and projects stay where they are. Before it runs, the uninstaller must carry the same signature an installer must (without looking up revocation, so that uninstalling works offline and a revoked app can still be removed). Any program the person runs can change Windows' per-user list, so one that is not named like an uninstaller, directly in the app's own install folder and signed is not run: the hub says so and opens the app's folder. The hub then watches Windows' list until the app is gone.
 
 Uninstalling the hub removes the hub, its start-up entry, its cached catalog and its download folder (`src-tauri/installer-hooks.nsh`). It never removes the apps.
 

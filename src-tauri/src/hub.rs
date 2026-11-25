@@ -39,6 +39,10 @@ pub struct Hub {
     pub just_updated: Mutex<Option<String>>,
     /// Update all or Install all while it runs: the apps one after another (commands::start_all).
     pub batch: Mutex<Option<BatchView>>,
+    /// Held while an app's installer or uninstaller runs, so there is never more than one at a time, however each was started.
+    pub installer: Mutex<()>,
+    /// The hub's own installer has been started and the hub is about to close: nothing else may start.
+    pub closing: AtomicBool,
 }
 
 impl Hub {
@@ -60,6 +64,8 @@ impl Hub {
             started_in_tray,
             just_updated: Mutex::new(just_updated),
             batch: Mutex::new(None),
+            installer: Mutex::new(()),
+            closing: AtomicBool::new(false),
         }
     }
 
@@ -405,6 +411,11 @@ pub fn clear_downloads() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Whether an app is as the batch would leave it: updated ("update") or installed ("install"), however that came about.
+pub fn in_place(apps: &[AppView], id: &str, kind: &str) -> bool {
+    apps.iter().find(|a| a.id == id).is_some_and(|a| a.installed.is_some() && (kind == "install" || !a.update))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -477,6 +488,10 @@ mod tests {
         assert_eq!(batch_order(&views, "update"), ["b", "a"]);
         assert_eq!(batch_order(&views, "install"), ["d"]);
         assert!(batch_order(&views, "something else").is_empty());
+        // c is up to date and b is not; d is not installed, so it is neither updated nor wanted by Update all (if the person removed it while it
+        // waited, Update all must not put it back).
+        assert!(in_place(&views, "c", "update") && !in_place(&views, "b", "update") && !in_place(&views, "d", "update"));
+        assert!(in_place(&views, "b", "install") && !in_place(&views, "d", "install") && !in_place(&views, "nothing", "install"));
         views[1].needs_newer_hub = true;
         assert_eq!(batch_order(&views, "update"), ["a"], "an app that needs a newer hub is left out");
     }

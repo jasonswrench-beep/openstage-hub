@@ -50,7 +50,7 @@ pub struct App {
     pub program_file: String,
     /// The installer's switches for an install that asks no questions but shows its own progress bar.
     pub quiet_switch: Vec<String>,
-    /// The uninstaller's switches for an uninstall that asks no questions, when Windows' list has no QuietUninstallString.
+    /// The uninstaller's switches for an uninstall that asks no questions. Those in Windows' own list are never used.
     #[serde(default = "default_uninstall_switch")]
     pub quiet_uninstall_switch: Vec<String>,
     pub expected_signer: String,

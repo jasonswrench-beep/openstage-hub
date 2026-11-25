@@ -426,7 +426,7 @@ void listen<JobEvent>("job", (e) => {
   } else {
     jobs.set(job.id, job);
     // Each new stage is announced once (not every percent).
-    if (before?.stage !== job.stage) announce(job.stage === "waiting" ? job.message : `${SPOKEN[job.stage] ?? job.stage} ${name}`);
+    if (before?.stage !== job.stage || (job.stage === "waiting" && before.message !== job.message)) announce(job.stage === "waiting" ? job.message : `${SPOKEN[job.stage] ?? job.stage} ${name}`);
   }
   draw();
 });

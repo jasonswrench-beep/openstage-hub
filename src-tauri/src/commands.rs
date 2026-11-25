@@ -6,8 +6,10 @@ use crate::brand::brand;
 use crate::hub::{Hub, View};
 use crate::jobs::{self, JobEvent};
 use crate::{system, tray};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 type HubState<'a> = State<'a, Arc<Hub>>;
@@ -46,15 +48,35 @@ pub async fn refresh(app: AppHandle, hub: HubState<'_>) -> Result<View, String> 
 /// The work of one job: what it says when it is done, or why it failed.
 type Work = Box<dyn FnOnce(&Hub, &AtomicBool, &dyn Fn(JobEvent)) -> Result<String, String> + Send>;
 
-/// Marks `id` as having a job running and gives its Cancel flag, or says it already has one.
-fn claim(hub: &Hub, id: &str) -> Result<Arc<AtomicBool>, String> {
-    let cancel = Arc::new(AtomicBool::new(false));
-    let mut running = hub.jobs.lock().unwrap();
+/// The id the hub's own update runs under.
+const HUB: &str = "hub";
+
+/// Whether a job may start while these run. The hub's own update closes the hub, so it starts only when nothing else is running (apart from the
+/// batch it ends, when it is that batch that starts it), and nothing starts once it has.
+fn may_start(running: &HashMap<String, Arc<AtomicBool>>, closing: bool, id: &str, from_batch: bool) -> Result<(), String> {
     if running.contains_key(id) {
         return Err("That is already under way.".into());
     }
+    if closing || running.contains_key(HUB) {
+        return Err("The hub is updating itself and will restart. Try again after that.".into());
+    }
+    if id == HUB && running.keys().any(|k| k != BATCH || !from_batch) {
+        return Err("Something else is still being downloaded, installed or removed. Update the hub when it has finished.".into());
+    }
+    Ok(())
+}
+
+/// Marks `id` as having a job running and gives its Cancel flag, or says why it may not start. Looking and marking are one step.
+fn claim_as(hub: &Hub, id: &str, from_batch: bool) -> Result<Arc<AtomicBool>, String> {
+    let cancel = Arc::new(AtomicBool::new(false));
+    let mut running = hub.jobs.lock().unwrap();
+    may_start(&running, hub.closing.load(Ordering::Relaxed), id, from_batch)?;
     running.insert(id.to_string(), cancel.clone());
     Ok(cancel)
+}
+
+fn claim(hub: &Hub, id: &str) -> Result<Arc<AtomicBool>, String> {
+    claim_as(hub, id, false)
 }
 
 fn end_event(id: &str, stage: &str, message: String) -> JobEvent {
@@ -114,11 +136,17 @@ pub fn start_job(app: AppHandle, hub: HubState<'_>, id: String) -> Result<(), St
     if let Some(why) = blocked_by_catalog(&hub) {
         return Err(why);
     }
-    if hub.batch.lock().unwrap().as_ref().is_some_and(|b| b.queued.contains(&id)) {
-        return Err("This app is waiting its turn in Update all or Install all.".into());
-    }
+    not_queued(&hub, &id)?;
     let work = install_work(&hub, &id)?;
     spawn_job(app, id, work)
+}
+
+/// Refuses an app that is waiting its turn in a batch: the batch will do it, and one the person is removing must not be put back by it.
+fn not_queued(hub: &Hub, id: &str) -> Result<(), String> {
+    if hub.batch.lock().unwrap().as_ref().is_some_and(|b| b.queued.iter().any(|q| q == id)) {
+        return Err("This app is waiting its turn in Update all or Install all. Press Stop first.".into());
+    }
+    Ok(())
 }
 
 /// The id Update all and Install all run under: its Cancel (the Stop button) stops the whole batch.
@@ -196,20 +224,8 @@ pub fn start_all(app: AppHandle, hub: HubState<'_>, kind: String) -> Result<(), 
             set(&|b| {
                 b.queued.retain(|q| q != id);
                 b.current = Some(name.clone());
-                b.current_id = Some(id.clone());
             });
-            // An app already being done on its own (its row's button) is left to that job, which reports for itself.
-            let worked = if hub.jobs.lock().unwrap().contains_key(id) {
-                true
-            } else {
-                match install_work(&hub, id).and_then(|work| claim(&hub, id).map(|cancel| (work, cancel))) {
-                    Ok((work, cancel)) => run_claimed(&app, &hub, id, &cancel, work),
-                    Err(why) => {
-                        let _ = app.emit("job", &end_event(id, "failed", why));
-                        false
-                    }
-                }
-            };
+            let Some(worked) = batch_step(&app, &hub, id, &kind, &stop, &set) else { break };
             if worked {
                 worked_count += 1;
             } else {
@@ -225,21 +241,54 @@ pub fn start_all(app: AppHandle, hub: HubState<'_>, kind: String) -> Result<(), 
         let stopped = stop.load(Ordering::Relaxed);
         let hub_now = hub_last && !stopped && not_done.is_empty();
         let mut message = batch_summary(&kind, order.len(), worked_count, &not_done, stopped, hub_last && !hub_now && !stopped);
-        hub.jobs.lock().unwrap().remove(BATCH);
         if hub_now {
             set(&|b| b.current = Some(brand().product_name.clone()));
-            match (newer_hub_release(&hub), claim(&hub, "hub")) {
-                (Some(release), Ok(cancel)) => {
-                    run_claimed(&app, &hub, "hub", &cancel, hub_update_work(app.clone(), release));
+            match newer_hub_release(&hub).ok_or("No newer hub is in the catalog.".to_string()).and_then(|r| claim_as(&hub, HUB, true).map(|c| (r, c))) {
+                Ok((release, cancel)) => {
+                    run_claimed(&app, &hub, HUB, &cancel, hub_update_work(app.clone(), release));
                 }
-                _ => message.push_str(" The hub could not be updated now. Its Update button is at the top."),
+                Err(why) => message.push_str(&format!(" The hub was not updated. {why}")),
             }
         }
+        hub.jobs.lock().unwrap().remove(BATCH);
         *hub.batch.lock().unwrap() = None;
         let _ = app.emit("batch-done", message.trim());
         publish(&app);
     });
     Ok(())
+}
+
+/// One app of a batch. Whether it worked, or nothing when Stop was pressed first. An app that already has a job of its own (its row's button, a
+/// download or an uninstall) is waited for; then what is there decides: it may be done already, still wanted, or gone.
+fn batch_step(app: &AppHandle, hub: &Hub, id: &str, kind: &str, stop: &AtomicBool, set: &dyn Fn(&dyn Fn(&mut crate::hub::BatchView))) -> Option<bool> {
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            return None;
+        }
+        if hub.jobs.lock().unwrap().contains_key(id) {
+            std::thread::sleep(Duration::from_millis(400));
+            continue;
+        }
+        let apps = hub.view().apps;
+        if !crate::hub::batch_order(&apps, kind).iter().any(|w| w == id) {
+            return Some(crate::hub::in_place(&apps, id, kind));
+        }
+        let work = match install_work(hub, id) {
+            Ok(work) => work,
+            Err(why) => {
+                let _ = app.emit("job", &end_event(id, "failed", why));
+                return Some(false);
+            }
+        };
+        // Started on its own just now: wait for that one.
+        let Ok(cancel) = claim(hub, id) else {
+            std::thread::sleep(Duration::from_millis(400));
+            continue;
+        };
+        // Only a job of the batch's own is cancelled by Stop.
+        set(&|b| b.current_id = Some(id.to_string()));
+        return Some(run_claimed(app, hub, id, &cancel, work));
+    }
 }
 
 #[tauri::command]
@@ -271,6 +320,7 @@ pub fn cancel_job(hub: HubState<'_>, id: String) {
 #[tauri::command]
 pub fn uninstall(app: AppHandle, hub: HubState<'_>, id: String) -> Result<(), String> {
     let entry = hub.app(&id).ok_or("That app is not in the catalog.")?;
+    not_queued(&hub, &id)?;
     spawn_job(
         app,
         id,
@@ -397,8 +447,10 @@ fn newer_hub_release(hub: &Hub) -> Option<crate::catalog::Release> {
 
 /// The work of the hub's own update: the same checks, then the new installer runs once this hub closes, and the new hub starts.
 fn hub_update_work(handle: AppHandle, release: crate::catalog::Release) -> Work {
-    Box::new(move |_hub: &Hub, cancel: &AtomicBool, report: &dyn Fn(JobEvent)| {
+    Box::new(move |hub: &Hub, cancel: &AtomicBool, report: &dyn Fn(JobEvent)| {
         jobs::update_hub(&release, cancel, report)?;
+        // From here until the hub has gone, no job may start (this one is about to be taken off the list of those running).
+        hub.closing.store(true, Ordering::Relaxed);
         // The installer waits for nothing but this program to end; give the window a moment to say so first.
         let quit = handle.clone();
         std::thread::spawn(move || {
@@ -417,7 +469,7 @@ pub fn update_hub(app: AppHandle, hub: HubState<'_>) -> Result<(), String> {
     }
     let release = newer_hub_release(&hub).ok_or("No newer hub is in the catalog.")?;
     let work = hub_update_work(app.clone(), release);
-    spawn_job(app, "hub".into(), work)
+    spawn_job(app, HUB.into(), work)
 }
 
 /// Whether Settings was chosen in the tray before this window had loaded (then the window opens Settings as it starts).
@@ -433,7 +485,26 @@ pub fn quit_hub(app: AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::batch_summary;
+    use super::*;
+
+    #[test]
+    fn the_hub_updates_itself_only_when_nothing_else_runs_and_nothing_starts_once_it_has() {
+        let running = |ids: &[&str]| ids.iter().map(|i| (i.to_string(), Arc::new(AtomicBool::new(false)))).collect::<HashMap<_, _>>();
+        // Apps beside each other, each once.
+        assert!(may_start(&running(&["openassess", BATCH]), false, "openstage-guide", false).is_ok());
+        assert!(may_start(&running(&["openassess"]), false, "openassess", false).unwrap_err().contains("under way"));
+        // The hub's own update: alone, or as the end of the batch, and never while an app is being installed, downloaded or removed.
+        assert!(may_start(&running(&[]), false, HUB, false).is_ok());
+        assert!(may_start(&running(&[BATCH]), false, HUB, true).is_ok());
+        assert!(may_start(&running(&[BATCH]), false, HUB, false).is_err(), "the banner's Update, while a batch runs");
+        assert!(may_start(&running(&["openassess"]), false, HUB, false).unwrap_err().contains("still being"));
+        assert!(may_start(&running(&[BATCH, "openassess"]), false, HUB, true).unwrap_err().contains("still being"), "a row's own job");
+        // Once it has started, and after it has ended while the hub closes, nothing starts.
+        for id in ["openassess", BATCH, HUB] {
+            assert!(may_start(&running(&[HUB]), false, id, true).is_err(), "{id}");
+            assert!(may_start(&running(&[]), true, id, true).unwrap_err().contains("restart"), "{id}");
+        }
+    }
 
     #[test]
     fn the_batch_says_plainly_how_it_went() {
