@@ -30,7 +30,7 @@ On 2026-11-17, Update all and Install all (not released; comes with 1.0.2):
 On 2026-11-24, the fixes from the security review of 2026-11-17 (not released; come with 1.0.2):
 
 - `npm test` (14 tests) passes; `cargo test` passes 33 tests for each hub. With the real published catalogs and keys, both hubs read them as before (9 OpenStage apps, 5 Prism apps). Copies signed with a test key that name another owner, another signer or an older date are refused by both.
-- All twelve suite uninstallers on your PC are validly signed, timestamped, with one and the same subject, issued by a "Microsoft ID Verified CS" authority; installed programs and uninstallers pass the hub's new check.
+- All twelve suite uninstallers on your PC are validly signed, timestamped, with one and the same subject, issued by a "Microsoft ID Verified CS" authority; on 2026-11-25 the hub's own new check was run on each of the twelve and on OpenExplainer's program, and all passed (they were read, not run).
 - The key tools were tried on throwaway keys in a copy of the repository, never on the hub keys.
 
 For you, when you choose (owner steps from the review): rewrap each hub key with a 20+ character password, and make each hub's offline backup key (`docs/releasing.md`).
@@ -94,7 +94,7 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 - [ ] Prism Reference Manager (`/P`)
 - [ ] Prism Transcribe (`/P`): its progress bar shows, no pages, and Open starts `prism-transcribe.exe`. 2026-11-18, first try: it installed (into `AppData\Local\Prism Transcribe`, with `prism-transcribe.exe`), but the hub said "Windows lists Prism Transcribe as version 0.1.0-alpha.1, not 0.1.0": its installer is built with the whole version. The catalog now expects 0.1.0-alpha.1 (`windowsListsFullVersion`). After the catalog is republished, Check for updates: its row shows installed 0.1.0-alpha.1 with no update offered, and Reinstall from its menu ends without that message.
 - [ ] Prism Survey (`/P`): its progress bar shows, no pages; Windows lists "Prism Survey" 0.1.0, and Open starts `prismsurvey-app.exe` (read from its build files, as for Transcribe). Its release was published as `v0.1.0-preview.2`, a version the hub does not read; on 2026-11-18 the build agent added the tag `v0.1.0-beta.1` at the same commit (6954716) and moved the release to it, marked pre-release, with the same signed setup. Later Survey releases need alpha, beta or rc in the tag.
-- [ ] Uninstall of each app still works (its uninstaller is now checked for your signature first): try one Tauri app, PDF Remediator and Capture Express. On 2026-11-24 all twelve uninstallers installed on your PC passed that check.
+- [ ] Uninstall of each app still works (its uninstaller is now checked for your signature first): try one Tauri app, PDF Remediator and Capture Express. On 2026-11-25 the uninstallers of all ten apps and both hubs installed on your PC passed that check (they were read, not run).
 - [ ] Uninstall says the app's documents and projects stay; afterwards they are still there and the app is gone from Windows' list.
 - [ ] Update with the app open: the row says "Close ... to continue"; closing it lets the update go on. The hub never closes it.
 - [ ] Update all with two or more updates and one app open: the closed apps update one after another, then the open one waits with "Close ... to continue". The notice reads "Updating 1 of 3: ..." throughout, and the status line ends with "All 3 apps updated."
