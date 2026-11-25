@@ -14,20 +14,21 @@
 //   2. builds the program and its installer with Tauri, with --remap-path-prefix for the user folder, Rust's folders and this repository,
 //      so no folder name of the building computer is written into the program;
 //   3. checks Tauri's installer script carries the web view's setup inside (never downloaded while installing);
-//   4. unpacks the setup with 7-Zip and checks every program in it: none may name this computer's user folder, and with --sign every one, and
-//      the setup, must be signed and timestamped by the publisher (OPENSTAGE_SIGN_PUBLISHER when it is set) and by the hubs' own rule
-//      (tools/signature.mjs). Signing is done by Tauri's sign
-//      command with tools/sign_windows.py, the suite's shared signing script (its top says which settings it needs);
+//   4. unpacks the setup with 7-Zip and checks every program in it: none may name this computer's user folder or carry a development switch
+//      (tools/dev-switches.mjs), the hub's program must be among them, and with --sign every one, and the setup, must be signed and timestamped
+//      by the publisher (OPENSTAGE_SIGN_PUBLISHER when it is set) and by the hubs' own rule (tools/signature.mjs). Signing is done by Tauri's
+//      sign command with tools/sign_windows.py, the suite's shared signing script (its top says which settings it needs);
 //   5. copies the setup to src-tauri/target/release-files/<Product-Name>-<RELEASE>-Setup.exe, with its SHA-256 in a .sha256.txt beside it,
 //      and says whether it is under the 8 MB target.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { applyBrand } from "./apply-brand.mjs";
 import { loadBrand } from "./brand.mjs";
+import { namingDevSwitches } from "./dev-switches.mjs";
 import { gitState, releaseProblems } from "./release-check.mjs";
 import { signatureOf, signatureProblem } from "./signature.mjs";
 
@@ -118,6 +119,14 @@ function checkSignatures(files, publisher) {
   return { ok: done.status === 0, words: `${done.stdout ?? ""}${done.stderr ?? ""}`.trim() };
 }
 
+function checkDevSwitches(files, nameOf) {
+  const named = namingDevSwitches(files);
+  if (named.length > 0) {
+    fail(`a development switch is in a program that would be released: ${named.map((x) => `${nameOf(x.file)} (${x.found.join(", ")})`).join("; ")}.\n` +
+      "  Only development builds may have them. See whether debug assertions are turned on for release builds (Cargo.toml, a cargo configuration file, CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS).");
+  }
+}
+
 function checkSetup(setup, sign) {
   if (!existsSync(sevenZip)) fail(`7-Zip is not at ${sevenZip} (set OPENSTAGE_7ZIP), so the programs inside the setup could not be checked.`);
   const work = mkdtempSync(join(tmpdir(), "hub-setup-check-"));
@@ -127,7 +136,11 @@ function checkSetup(setup, sign) {
     const inside = programsIn(work);
     const named = namingUserFolder(inside);
     if (named.length > 0) fail(`these programs in the setup name this computer's user folder: ${named.map((f) => relative(work, f)).join(", ")}`);
-    say(`  ${inside.length} programs in the setup; none names this computer's user folder`);
+    // Without it, the checks here would have looked at everything but the hub.
+    const hubs = inside.filter((f) => basename(f).toLowerCase() === basename(appExe).toLowerCase());
+    if (hubs.length !== 1) fail(`expected ${basename(appExe)} once in the setup, found it ${hubs.length} times.`);
+    checkDevSwitches(inside, (f) => relative(work, f));
+    say(`  ${inside.length} programs in the setup, the hub's among them; none names this computer's user folder or carries a development switch`);
     if (!sign) return;
     const theirs = inside.filter((f) => MAKERS_FILES.has(f.split(/[\\/]/).pop().toLowerCase()));
     const ours = [setup, ...inside.filter((f) => !theirs.includes(f))];
@@ -204,7 +217,8 @@ function main(argv) {
 
   say("3. Checks.");
   if (namingUserFolder([appExe]).length > 0) fail(`the program names this computer's user folder: ${appExe}`);
-  say("  the program does not name this computer's user folder");
+  checkDevSwitches([appExe], basename);
+  say("  the program does not name this computer's user folder and carries no development switch");
   const mode = existsSync(nsisScript) ? webviewMode(readFileSync(nsisScript, "utf8")) : null;
   if (mode !== "embedBootstrapper" && mode !== "offlineInstaller") {
     fail(`the installer would get the web view's setup by ${mode ?? "an unknown way"}, which downloads it while installing. tauri.conf.json must embed it.`);

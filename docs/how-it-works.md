@@ -90,6 +90,9 @@ A development build (not a release build) also reads:
 - `HUB_TEST_KEY`: a test key's public half, used instead of the built-in one.
 - `--install <app id>`: runs the six install steps for one app, printing each stage, and stops.
 - `--print-view`: prints what the window would show, after fetching the catalog, and stops.
+- `--update-hub`: runs the hub's own update from a test catalog, printing each stage, and stops. `HUB_REAL_LOCALAPPDATA` is the local data folder its setup is given, when the trial itself keeps its data in another one.
+
+Every build of the installer searches the programs it made for these names and stops if one has any (`tools/dev-switches.mjs`). The optimizer leaves no text of the `--` switches, so `npm test` also checks in the code that each switch is under `#[cfg(debug_assertions)]`. A new switch goes in that list; `npm test` fails until it does.
 
 `tests/ui-preview.html` (with `npm run dev`, at `http://localhost:1430/tests/ui-preview.html`) runs the real window code against a stand-in for the Rust side, for looking at every row state and testing by keyboard and screen reader.
 
