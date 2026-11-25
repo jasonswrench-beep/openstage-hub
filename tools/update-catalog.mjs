@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Update <short name> Catalog.bat (Update OpenStage Catalog.bat, Update Prism Catalog.bat) runs this for its brand. It:
 //   1. reads each repository's newest stable and preview releases on GitHub (drafts never count) and finds each setup file;
-//   2. downloads each setup file it has not checked before, computes its SHA-256 and checks its code signature (valid, timestamped, signed by
-//      the expected signer); it STOPS if any setup file is missing or unsigned;
+//   2. downloads each setup file it has not checked before, computes its SHA-256 and checks its code signature by the hubs' own rule
+//      (tools/signature.mjs); it STOPS if any setup file is missing or unsigned;
 //   3. writes the catalog, with each app's icon inside it as a picture, prints a short table of what changed, asks for the hub key's password
 //      and signs it;
 //   4. checks the signature with the public key built into the hub (the brand's brand.json), and uploads the catalog and its signature to the
@@ -27,6 +27,7 @@ import { appEntry, changes, checkSignature, downloadUrl, findAsset, markOf, pick
 import { trustedKeys } from "./catalog-floor.mjs";
 import { keyFile } from "./make-hub-key.mjs";
 import { askSecret } from "./prompt.mjs";
+import { signatureOf, signatureProblem } from "./signature.mjs";
 import { loadBrand, root } from "./brand.mjs";
 
 let chosen;
@@ -74,22 +75,14 @@ function sha256(file) {
   return createHash("sha256").update(readFileSync(file)).digest("hex");
 }
 
-/** Windows' own signature check, through PowerShell's Get-AuthenticodeSignature. */
-function signatureOf(file) {
-  const script =
-    `$s = Get-AuthenticodeSignature -LiteralPath $env:HUB_FILE; ` +
-    `$n = if ($s.SignerCertificate) { $s.SignerCertificate.GetNameInfo(0, $false) } else { '' }; ` +
-    `[pscustomobject]@{ status = "$($s.Status)"; signer = $n; timestamped = [bool]$s.TimeStamperCertificate } | ConvertTo-Json -Compress`;
-  const done = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", env: { ...process.env, HUB_FILE: file } });
-  if (done.status !== 0) stop(`the signature of ${file} could not be checked: ${done.stderr.trim()}`);
-  return JSON.parse(done.stdout);
-}
+/** What a remembered check was against: a file checked against other rules is checked again. */
+const rules = createHash("sha256").update(JSON.stringify([brand.expectedSigner, brand.signerSubject, brand.signerIssuers, brand.signerIdentities])).digest("hex").slice(0, 16);
 
 /** Downloads (once) and checks one setup file. Returns its SHA-256. */
 async function checked(asset, url, expectedSigner, what, memory) {
   const githubSum = (asset.digest ?? "").replace(/^sha256:/, "");
   const known = githubSum && memory[githubSum];
-  if (known && known.size === asset.size && known.signer === expectedSigner) {
+  if (known && known.size === asset.size && known.signer === expectedSigner && known.rules === rules) {
     say(`  ${what}: ${asset.name} (checked before)`);
     return githubSum;
   }
@@ -99,18 +92,12 @@ async function checked(asset, url, expectedSigner, what, memory) {
     await download(url, file);
     const sum = sha256(file);
     if (githubSum && sum !== githubSum) stop(`${what}: the downloaded ${asset.name} does not match GitHub's own SHA-256 of it.`);
-    const sig = signatureOf(file);
-    const problem =
-      sig.status === "NotSigned" ? "is not signed"
-      : sig.status !== "Valid" ? `is not validly signed (Windows says ${sig.status})`
-      : !sig.timestamped ? "is signed without a timestamp"
-      : sig.signer.toLowerCase() !== expectedSigner.toLowerCase() ? `is signed by ${sig.signer}, not ${expectedSigner}`
-      : null;
+    const problem = signatureProblem(signatureOf(file), brand);
     if (problem) {
       problems.push(`${what}: ${asset.name} ${problem}. If this release came before signing began, add its tag to "ignoreTags" in ${shown(chosen.appsFile)}.`);
       return null;
     }
-    memory[sum] = { name: asset.name, size: asset.size, signer: expectedSigner, checked: stamp() };
+    memory[sum] = { name: asset.name, size: asset.size, signer: expectedSigner, rules, checked: stamp() };
     writeFileSync(checkedFile, JSON.stringify(memory, null, 1) + "\n");
     return sum;
   } finally {

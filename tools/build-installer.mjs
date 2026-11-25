@@ -15,7 +15,8 @@
 //      so no folder name of the building computer is written into the program;
 //   3. checks Tauri's installer script carries the web view's setup inside (never downloaded while installing);
 //   4. unpacks the setup with 7-Zip and checks every program in it: none may name this computer's user folder, and with --sign every one, and
-//      the setup, must be signed and timestamped by the publisher (OPENSTAGE_SIGN_PUBLISHER when it is set). Signing is done by Tauri's sign
+//      the setup, must be signed and timestamped by the publisher (OPENSTAGE_SIGN_PUBLISHER when it is set) and by the hubs' own rule
+//      (tools/signature.mjs). Signing is done by Tauri's sign
 //      command with tools/sign_windows.py, the suite's shared signing script (its top says which settings it needs);
 //   5. copies the setup to src-tauri/target/release-files/<Product-Name>-<RELEASE>-Setup.exe, with its SHA-256 in a .sha256.txt beside it,
 //      and says whether it is under the 8 MB target.
@@ -28,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { applyBrand } from "./apply-brand.mjs";
 import { loadBrand } from "./brand.mjs";
 import { gitState, releaseProblems } from "./release-check.mjs";
+import { signatureOf, signatureProblem } from "./signature.mjs";
 
 /** The release this build is. Raise it for every release; the hub compares it with the catalog's hub entry. Tags are v<RELEASE>. */
 export const RELEASE = "1.0.2";
@@ -132,6 +134,11 @@ function checkSetup(setup, sign) {
     const publisher = process.env.OPENSTAGE_SIGN_PUBLISHER || undefined;
     const mine = checkSignatures(ours, publisher);
     if (!mine.ok) fail(`the signed setup did not pass:\n${mine.words}`);
+    // Hubs already installed must accept this setup when they update themselves to it, and this hub must accept its own.
+    for (const file of ours) {
+      const problem = signatureProblem(signatureOf(file), brand);
+      if (problem) fail(`${file} ${problem}.`);
+    }
     const makers = checkSignatures(theirs, undefined);
     if (!makers.ok) fail(`a program its maker signs does not carry a valid signature:\n${makers.words}`);
     say(`  the setup and ${ours.length - 1} programs in it are signed and timestamped${publisher ? ` by ${publisher}` : ""}; ${theirs.length} kept their makers' signatures`);

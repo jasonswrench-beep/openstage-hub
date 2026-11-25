@@ -18,6 +18,10 @@ Its password must be at least 20 characters. To protect an existing key better, 
 
 The hub's repository must be **public** before any hub can download the catalog or its own updates: release files of a private repository are not downloadable without signing in. Both are public.
 
+## If your signing identity is ever verified again
+
+The signing authority puts an identity number in every certificate it issues to you (the long one of the enhanced key usages, beginning `1.3.6.1.4.1.311.97.`). Hubs accept only the numbers in `signerIdentities` in `brand.json`, so a file signed with a new number is refused by every hub already installed, the hub's own update included. The number stays the same as certificates come and go, but may change if identity verification is redone. Before that happens, if you can: add the new number beside the old one in both brand files, release both hubs signed with the **old** identity, and give people time to update. The catalog script and a signed build stop, and show the number they found, if a signature would be refused.
+
 ## Each release
 
 1. Raise `RELEASE` in `tools/build-installer.mjs`, and the version in `package.json`, `src-tauri/Cargo.toml` and `src-tauri/tauri.base.json`, to the new version (such as `1.0.2`). The build stops if they differ.

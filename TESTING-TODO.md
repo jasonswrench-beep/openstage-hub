@@ -33,6 +33,8 @@ On 2026-11-24, the fixes from the security review of 2026-11-17 (not released; c
 - All twelve suite uninstallers on your PC are validly signed, timestamped, with one and the same subject, issued by a "Microsoft ID Verified CS" authority; on 2026-11-25 the hub's own new check was run on each of the twelve and on OpenExplainer's program, and all passed (they were read, not run).
 - The key tools were tried on throwaway keys in a copy of the repository, never on the hub keys.
 
+- On 2026-11-25 the signer's verified identity number was pinned too (your choice): `cargo test` 37 for each hub, `npm test` 15. All twelve suite uninstallers installed on your PC pass, and so does the newest setup of every app and of both hubs on GitHub (16 downloaded again and checked by the catalog script's dry runs).
+
 For you, when you choose (owner steps from the review): rewrap each hub key with a 20+ character password, and make each hub's offline backup key (`docs/releasing.md`).
 
 ## First release (list item 1)

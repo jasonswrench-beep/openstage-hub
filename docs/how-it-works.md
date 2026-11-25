@@ -27,7 +27,7 @@ The hub reads one small signed file instead of asking GitHub about each app: the
 
 1. Download the installer from the catalog's address into `%LOCALAPPDATA%\org.openstage.hub\downloads`. Only github.com and GitHub's release download hosts are accepted; each redirect is followed by hand and its host checked.
 2. Check its SHA-256 against the catalog. A mismatch deletes the file and stops. From before the checksum until step 5 has started it, the file is held open so that no other program can change, move or replace it.
-3. Check its code signature with Windows' own check (WinVerifyTrust, with revocation): valid, timestamped, and the certificate `brand.json` describes: the signer's name, parts of its full subject (`signerSubject`) and the authority that issued it (`signerIssuers`). Anything else deletes the file and stops. None of this comes from the catalog.
+3. Check its code signature with Windows' own check (WinVerifyTrust, with revocation): valid, timestamped, and the certificate `brand.json` describes: the signer's name, parts of its full subject (`signerSubject`), the authority that issued it (`signerIssuers`) and the identity number that authority gave the signer (`signerIdentities`), which another person of the same name would not have. Anything else deletes the file and stops. None of this comes from the catalog.
 4. If the app is running, ask the person to close it and wait. The hub never closes an app itself.
 5. Run the installer with its quiet switch (from the catalog), which shows the installer's own progress bar rather than its pages. Installs are per user; an installer that asks for administrator rights is not run.
 6. Read the installed version back from Windows' per-user installed apps list and confirm it, then delete the download.

@@ -2,8 +2,8 @@
 //! The two checks every downloaded installer passes before it runs:
 //! 1. its SHA-256 equals the catalog's;
 //! 2. Windows' own signature check (WinVerifyTrust) says its code signature is valid, the signature carries a timestamp, and the certificate is
-//!    the one the brand file names: the signer's name, parts of its full subject, and the authority that issued it. The certificate's
-//!    revocation is checked too. These come from the program, never from the catalog.
+//!    the one the brand file names: the signer's name, parts of its full subject, the authority that issued it, and the identity number that
+//!    authority gave the signer. The certificate's revocation is checked too. These come from the program, never from the catalog.
 //!
 //! The file is held open from before its checksum is computed until it has been started (`hold`), so nothing can change or replace it between
 //! the check and the run. An app's uninstaller passes the same signature check before it is run.
@@ -65,6 +65,8 @@ pub struct Signature {
     pub subject: Vec<String>,
     /// The name of the authority that issued the certificate.
     pub issuer: String,
+    /// The certificate's own enhanced key usages, as numbers; the signer's identity number is one of them.
+    pub usages: Vec<String>,
     pub timestamped: bool,
 }
 
@@ -81,7 +83,10 @@ pub enum Revocation {
 pub fn signature(path: &Path, what: &str, revocation: Revocation) -> Result<Signature, String> {
     use windows::core::HSTRING;
     use windows::Win32::Foundation::{HANDLE, HWND};
-    use windows::Win32::Security::Cryptography::{CertGetNameStringW, CERT_CONTEXT, CERT_NAME_ISSUER_FLAG, CERT_NAME_RDN_TYPE, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_X500_NAME_STR};
+    use windows::Win32::Security::Cryptography::{
+        CertGetEnhancedKeyUsage, CertGetNameStringW, CERT_CONTEXT, CERT_FIND_EXT_ONLY_ENHKEY_USAGE_FLAG, CERT_NAME_ISSUER_FLAG, CERT_NAME_RDN_TYPE, CERT_NAME_SIMPLE_DISPLAY_TYPE,
+        CERT_X500_NAME_STR, CTL_USAGE,
+    };
     use windows::Win32::Security::WinTrust::*;
 
     // CERT_NAME_RDN_TYPE gives the whole subject as text, in the form named by its parameter.
@@ -89,6 +94,21 @@ pub fn signature(path: &Path, what: &str, revocation: Revocation) -> Result<Sign
         let mut name = vec![0u16; 1024];
         let n = CertGetNameStringW(cert, kind, flags, form, Some(&mut name));
         String::from_utf16_lossy(&name[..(n.saturating_sub(1)) as usize])
+    }
+
+    // The usages written in the certificate itself (not ones added on this computer). None when they could not be read.
+    unsafe fn usages_of(cert: *const CERT_CONTEXT) -> Vec<String> {
+        let mut size = 0u32;
+        if CertGetEnhancedKeyUsage(cert, CERT_FIND_EXT_ONLY_ENHKEY_USAGE_FLAG.0, None, &mut size).is_err() || size == 0 {
+            return vec![];
+        }
+        // Eight-byte steps, so that the structure at its start is aligned.
+        let mut buffer = vec![0u64; (size as usize).div_ceil(8)];
+        let usage = buffer.as_mut_ptr() as *mut CTL_USAGE;
+        if CertGetEnhancedKeyUsage(cert, CERT_FIND_EXT_ONLY_ENHKEY_USAGE_FLAG.0, Some(usage), &mut size).is_err() {
+            return vec![];
+        }
+        (0..(*usage).cUsageIdentifier as usize).filter_map(|i| (*(*usage).rgpszUsageIdentifier.add(i)).to_string().ok()).collect()
     }
 
     let wide = HSTRING::from(path.as_os_str());
@@ -127,6 +147,7 @@ pub fn signature(path: &Path, what: &str, revocation: Revocation) -> Result<Sign
                     signer: name_of(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, None),
                     subject: subject_parts(&subject),
                     issuer: name_of(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG, None),
+                    usages: usages_of(cert),
                     timestamped: (*signer).csCounterSigners > 0,
                 })
             };
@@ -180,7 +201,8 @@ fn words_for(status: i32, what: &str) -> String {
 }
 
 /// Whether a valid signature is the brand's: timestamped; the signer's name (without regard to capitals); every part of the subject the brand
-/// file names; and an issuing authority the brand file names. A certificate in another person's same name, or from another authority, is refused.
+/// file names; an issuing authority the brand file names; and an identity number it names. A certificate in another person's same name, or from
+/// another authority, is refused.
 pub fn check_signature(found: &Signature, b: &Brand, what: &str) -> Result<(), String> {
     if !found.timestamped {
         return Err(format!("The {what}'s signature has no timestamp, so it was not trusted."));
@@ -196,6 +218,9 @@ pub fn check_signature(found: &Signature, b: &Brand, what: &str) -> Result<(), S
     let from = |start: &String| !start.trim().is_empty() && found.issuer.to_ascii_lowercase().starts_with(&start.to_ascii_lowercase());
     if !b.signer_issuers.iter().any(from) {
         return Err(format!("The {what}'s certificate was issued by {}, not by the authority that issues {expected}'s, so it was not trusted.", found.issuer));
+    }
+    if !b.signer_identities.iter().any(|id| found.usages.contains(id)) {
+        return Err(format!("The {what} is signed by someone with the same name as {expected}, but not the same verified identity, so it was not trusted."));
     }
     Ok(())
 }
@@ -260,6 +285,7 @@ mod tests {
             signer: b.expected_signer.clone(),
             subject: b.signer_subject.iter().cloned().chain(["L=Somewhere".to_string()]).collect(),
             issuer: format!("{}AOC CA 04", b.signer_issuers[0]),
+            usages: vec!["1.3.6.1.4.1.311.97.1.0".into(), "1.3.6.1.5.5.7.3.3".into(), b.signer_identities[0].clone()],
             timestamped: true,
         }
     }
@@ -297,6 +323,21 @@ mod tests {
         refused(&|s| s.issuer = "Some Other CA".into(), "issued by Some Other CA");
         refused(&|s| s.issuer = format!("Fake {}AOC CA 04", b.signer_issuers[0]), "issued by Fake");
         refused(&|s| s.issuer.clear(), "issued by");
+        // Another verified person of the same name, in the same country, from the same authority: all that differs is the identity number.
+        refused(&|s| { s.usages.pop(); s.usages.push("1.3.6.1.4.1.311.97.11111111.22222222.33333333.44444444".into()); }, "verified identity");
+        refused(&|s| s.usages.clear(), "verified identity");
+        refused(&|s| s.usages = vec!["1.3.6.1.4.1.311.97.1.0".into(), "1.3.6.1.5.5.7.3.3".into()], "verified identity");
+        refused(&|s| { let id = s.usages.pop().unwrap(); s.usages.push(format!("{id}1")); }, "verified identity");
+        // After identity verification is done again, the old and the new number can both be named.
+        let mut two = b.clone();
+        two.signer_identities.push("1.3.6.1.4.1.311.97.11111111.22222222.33333333.44444444".into());
+        let mut renewed = ours();
+        renewed.usages = vec![two.signer_identities[1].clone()];
+        assert_eq!(check_signature(&renewed, &two, "installer"), Ok(()));
+        assert_eq!(check_signature(&ours(), &two, "installer"), Ok(()));
+        let mut nobody = b.clone();
+        nobody.signer_identities = vec![];
+        assert!(check_signature(&ours(), &nobody, "installer").is_err(), "a brand that names no identity trusts none");
         // A brand that names no issuer trusts none.
         let mut none = b.clone();
         none.signer_issuers = vec![];

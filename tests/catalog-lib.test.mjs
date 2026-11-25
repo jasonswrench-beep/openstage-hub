@@ -12,6 +12,7 @@ import { brandIds, loadBrand, root } from "../tools/brand.mjs";
 import { branded } from "../tools/apply-brand.mjs";
 import { floorProblem, trustedKeys } from "../tools/catalog-floor.mjs";
 import { generateKeyPairSync } from "node:crypto";
+import { signatureProblem } from "../tools/signature.mjs";
 
 const rel = (tag, draft = false, assets = []) => ({ tag_name: tag, draft, assets });
 
@@ -142,6 +143,7 @@ test("every brand has what the build and the hub need, and no brand value of one
     for (const app of apps.apps) assert.equal(app.expectedSigner, brand.expectedSigner, `${id}/${app.id}: its signer is the brand's`);
     assert.ok(brand.signerIssuers.length && brand.signerIssuers.every((i) => i.trim().length > 5), `${id}: brand.json names who may issue the signing certificate`);
     assert.ok(brand.signerSubject.length && brand.signerSubject.every((p) => /^[A-Z]+=./.test(p)), `${id}: brand.json names parts of the certificate's subject`);
+    assert.ok(brand.signerIdentities.length && brand.signerIdentities.every((i) => /^1\.3\.6\.1\.4\.1\.311\.97(\.\d+){4,}$/.test(i)), `${id}: brand.json names the signer's identity number`);
     assert.match(brand.minimumCatalogDate, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/, `${id}: minimumCatalogDate is a catalog's date`);
     assert.ok(brand.catalogBackupKey === "" || Buffer.from(brand.catalogBackupKey, "base64").length === 32, `${id}: the backup key's public half, or none yet`);
     assert.notEqual(brand.catalogBackupKey, brand.catalogPublicKey, `${id}: the backup key is another key`);
@@ -164,6 +166,28 @@ test("every brand has what the build and the hub need, and no brand value of one
   const conf = branded(JSON.parse(readFileSync(join(root, "src-tauri", "tauri.base.json"), "utf8")), all[0].brand, all[0].id);
   assert.equal(conf.identifier, all[0].brand.identifier);
   assert.ok(conf.bundle.icon.every((p) => p.startsWith(`../brands/${all[0].id}/app-icons/`)), "the program icons come from the brand's folder");
+});
+
+test("the scripts refuse a signature the hubs would refuse", () => {
+  for (const id of brandIds()) {
+    const { brand } = loadBrand(id);
+    const ours = {
+      status: "Valid", timestamped: true, signer: brand.expectedSigner, subject: `CN=${brand.expectedSigner}, ${brand.signerSubject.join(", ")}`,
+      issuer: `${brand.signerIssuers[0]}AOC CA 04`, usages: ["1.3.6.1.5.5.7.3.3", brand.signerIdentities[0]],
+    };
+    assert.equal(signatureProblem(ours, brand), null);
+    const refused = (change, words) => assert.match(signatureProblem({ ...ours, ...change }, brand) ?? "accepted", words);
+    refused({ status: "NotSigned" }, /is not signed/);
+    refused({ status: "HashMismatch" }, /HashMismatch/);
+    refused({ timestamped: false }, /without a timestamp/);
+    refused({ signer: "Someone Else" }, /signed by Someone Else/);
+    refused({ subject: "CN=Jason Wrench, O=Other, C=US" }, /subject/);
+    refused({ issuer: "Some Other CA" }, /issued by Some Other CA/);
+    refused({ usages: ["1.3.6.1.5.5.7.3.3", `${brand.signerIdentities[0]}1`] }, /identity number/);
+    refused({ usages: [] }, /identity number/);
+    refused({ usages: null }, /identity number/);
+    assert.equal(signatureProblem({ ...ours, usages: brand.signerIdentities[0] }, brand), null, "PowerShell writes a list of one as the one");
+  }
 });
 
 test("a hub key file is protected with scrypt, and rewrapping keeps the same key", () => {

@@ -26,6 +26,7 @@
   "expectedSigner": "Jason Wrench",
   "signerSubject": ["O=Jason Wrench", "C=US"],
   "signerIssuers": ["Microsoft ID Verified CS "],
+  "signerIdentities": ["1.3.6.1.4.1.311.97.35130899.532497216.217018305.202898235"],
   "sibling": {
     "label": "Also from Jason Wrench: OpenStage Hub",
     "url": "https://github.com/jasonswrench-beep/openstage-hub/releases"

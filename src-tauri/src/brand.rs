@@ -30,6 +30,9 @@ pub struct Brand {
     pub signer_subject: Vec<String>,
     /// What the name of the authority that issued the signing certificate must start with.
     pub signer_issuers: Vec<String>,
+    /// The identity numbers the signing certificate may carry (one is enough). The issuing authority gives one to each person or organisation it
+    /// has verified and puts it, as an enhanced key usage, in every certificate it issues to them, so another person of the same name has another.
+    pub signer_identities: Vec<String>,
     pub sibling: Sibling,
 }
 
@@ -95,6 +98,9 @@ mod tests {
         assert!(!b.allowed_owner.is_empty() && !b.expected_signer.is_empty());
         assert!(!b.signer_issuers.is_empty() && b.signer_issuers.iter().all(|i| i.len() > 5), "an empty prefix would allow any issuer");
         assert!(b.signer_subject.iter().all(|p| p.contains('=')));
+        // A number under the authority's identity branch, not one every certificate carries (code signing itself is 1.3.6.1.5.5.7.3.3).
+        assert!(!b.signer_identities.is_empty());
+        assert!(b.signer_identities.iter().all(|i| i.starts_with("1.3.6.1.4.1.311.97.") && i.split('.').count() >= 12), "{:?}", b.signer_identities);
         assert!(b.owns(&b.repository));
         assert!(b.owns(&format!("{}/x", b.allowed_owner.to_uppercase())), "capitals do not matter, as on GitHub");
         assert!(!b.owns("someone/x") && !b.owns("") && !b.owns("/x") && !b.owns(&b.allowed_owner));
