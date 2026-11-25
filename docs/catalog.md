@@ -28,7 +28,7 @@ It needs Node.js and the GitHub command line (`gh`), signed in as the owner. Che
 | `repository` | `owner/name` on GitHub |
 | `installedAs` | The name Windows lists in installed apps (DisplayName) |
 | `programFile` | The program's file name inside its install folder |
-| `quietSwitch` | The installer's switches for an install with no questions that shows its progress bar |
+| `quietSwitch` | The installer's switches for an install with no questions that shows its progress bar. To one that has `/P`, the hub adds `/UPDATE` when the app is already installed (how-it-works.md) |
 | `quietUninstallSwitch` | The switches the uninstaller is run with (default `/S`). Switches in Windows' own list are never used |
 | `expectedSigner` | The name on the code signature. It must be the one in the brand's `brand.json`: the script stops, and hubs refuse the catalog, if it is any other |
 | `setupPattern` | A regular expression matching exactly one file of a release: its setup |

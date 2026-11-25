@@ -5,7 +5,8 @@
 //!    open, so nothing can change or replace it after the check;
 //! 3. check its code signature with Windows' own check: valid, timestamped, and the brand's own certificate; anything else deletes it and stops;
 //! 4. if the app is running, ask the person to close it and wait (the hub never closes an app itself: that could lose unsaved work);
-//! 5. run the installer with its quiet switch (it shows its own progress bar, not its pages; installs are per user, so no administrator);
+//! 5. run the installer with its quiet switch (it shows its own progress bar, not its pages; installs are per user, so no administrator). Over
+//!    an app that is already installed it is told that it is an update, so that the app's settings, shortcuts and start-up entry are kept;
 //! 6. read the installed version back from Windows' installed apps list and confirm it, then delete the download.
 
 use crate::catalog::{App, Release};
@@ -165,6 +166,20 @@ fn run_and_wait(program: &Path, args: &[String], held: File) -> Result<i32, Stri
     Ok(child.wait().ok().and_then(|s| s.code()).unwrap_or(-1))
 }
 
+/// The switches an app's installer is run with: the catalog's, and over an installed app also /UPDATE for the installers that take /P (Tauri's,
+/// which the apps' own Check for updates runs the same way). Without it, such an installer that finds the same version number in Windows (a
+/// Reinstall, or alpha 4 to alpha 5, both 0.1.0 there) runs the old uninstaller first, as if the person were removing the app: its shortcuts and
+/// start-up entry go, and an app that clears its settings when it is uninstalled clears them. A first install is not told so, because an update
+/// makes no shortcuts. Other installers (/S, /SILENT) look after this themselves.
+fn install_switches(quiet_switch: &[String], installed: bool) -> Vec<String> {
+    let has = |s: &str| quiet_switch.iter().any(|q| q.eq_ignore_ascii_case(s));
+    let mut switches = quiet_switch.to_vec();
+    if installed && has("/P") && !has("/UPDATE") {
+        switches.push("/UPDATE".into());
+    }
+    switches
+}
+
 /// The whole install or update of an app.
 pub fn install(hub: &Hub, app: &App, release: &Release, cancel: &AtomicBool, report: Report) -> Result<(), String> {
     let Checked { path: file, held } = fetch_and_check(&app.id, release, cancel, report)?;
@@ -175,7 +190,9 @@ pub fn install(hub: &Hub, app: &App, release: &Release, cancel: &AtomicBool, rep
             return Err("Cancelled. Nothing was installed.".to_string());
         };
         report(event(&app.id, "installing", "Installing"));
-        let code = run_and_wait(&file, &app.quiet_switch, held)?;
+        // Looked at now, not before the wait: the app may have been removed meanwhile.
+        let installed = system::find_installed(&system::installed_apps(), &app.installed_as).is_some();
+        let code = run_and_wait(&file, &install_switches(&app.quiet_switch, installed), held)?;
         if code != 0 {
             return Err(format!("The installer stopped with an error (code {code}), so {} may not have been installed.", app.name));
         }
@@ -291,15 +308,16 @@ fn trusted_uninstaller(program: &Path) -> Result<File, String> {
 }
 
 /// The hub's own update: the same checks on its own installer, which is started directly (no command line is built from its path) and then runs
-/// while this hub closes. /P shows its progress bar only, and /R starts the new hub when it is done.
+/// while this hub closes. /P shows its progress bar only, /R starts the new hub when it is done, and /UPDATE keeps the installer from running the
+/// old hub's uninstaller first (it would when both have the same number), which clears the hub's settings and its Start with Windows entry.
 pub fn update_hub(release: &Release, cancel: &AtomicBool, report: Report) -> Result<(), String> {
     let Checked { path, held } = fetch_and_check("hub", release, cancel, report)?;
     report(event("hub", "installing", "Installing"));
     start_held(&path, &hub_setup_switches(), held).map(|_| ()).map_err(|_| "Windows could not start the hub's installer.".to_string())
 }
 
-fn hub_setup_switches() -> [String; 2] {
-    ["/P".into(), "/R".into()]
+fn hub_setup_switches() -> [String; 3] {
+    ["/P".into(), "/R".into(), "/UPDATE".into()]
 }
 
 #[cfg(all(test, windows))]
@@ -327,6 +345,19 @@ mod tests {
         assert!(check_held(&file, &sum, &cancel).is_err());
         std::fs::remove_file(&file).expect("a refused file is let go, so it can be deleted");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_installed_app_is_updated_and_a_new_one_is_installed() {
+        let s = |list: &[&str]| list.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(install_switches(&s(&["/P"]), true), ["/P", "/UPDATE"], "its settings, shortcuts and start-up entry are kept");
+        assert_eq!(install_switches(&s(&["/P"]), false), ["/P"], "a first install makes its shortcuts");
+        assert_eq!(install_switches(&s(&["/P", "/UPDATE"]), true), ["/P", "/UPDATE"], "once");
+        // The other installers are left as the catalog has them.
+        for other in [s(&["/S"]), s(&["/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER"])] {
+            assert_eq!(install_switches(&other, true), other);
+            assert_eq!(install_switches(&other, false), other);
+        }
     }
 
     #[test]
@@ -430,6 +461,6 @@ mod tests {
             }
             gone.expect("let go once it has ended");
         }
-        assert_eq!(hub_setup_switches(), ["/P", "/R"], "quiet, and start the hub again");
+        assert_eq!(hub_setup_switches(), ["/P", "/R", "/UPDATE"], "quiet, start the hub again, and keep its settings");
     }
 }

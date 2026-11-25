@@ -76,6 +76,31 @@ pub fn run() {
         }
         return;
     }
+    // A development copy can run the hub's own update, printing each stage, and then end as the hub does: <program> --update-hub
+    // It installs the release named by the catalog's hub entry over the installed hub. Use it with a test catalog (HUB_CATALOG_DIR, HUB_TEST_KEY).
+    #[cfg(debug_assertions)]
+    if std::env::args().any(|a| a == "--update-hub") {
+        let hub = Hub::new(false);
+        println!("Catalog: {:?}", hub.refresh());
+        let newer = hub.catalog.lock().unwrap().as_ref().and_then(|c| c.hub.clone()).filter(|h| version::newer(&h.version, brand::HUB_VERSION));
+        let Some(release) = newer else { return println!("The catalog offers no newer hub.") };
+        println!("Updating the hub to {} from {}", release.version, release.url);
+        let report = |e: jobs::JobEvent| {
+            if e.stage != "downloading" || e.received == 0 || e.received == e.total {
+                println!("  {}: {}", e.stage, e.message);
+            }
+            // The trial keeps its own data in another folder (LOCALAPPDATA); the setup it starts next must see the real one.
+            if let (true, Some(real)) = (e.stage == "installing", std::env::var_os("HUB_REAL_LOCALAPPDATA")) {
+                std::env::set_var("LOCALAPPDATA", real);
+            }
+        };
+        match jobs::update_hub(&release, &std::sync::atomic::AtomicBool::new(false), &report) {
+            Ok(()) => std::thread::sleep(std::time::Duration::from_millis(1200)),
+            Err(why) => println!("Failed: {why}"),
+        }
+        println!("This copy ends now.");
+        return;
+    }
     let hub = Arc::new(Hub::new(in_tray));
 
     let app = tauri::Builder::default()

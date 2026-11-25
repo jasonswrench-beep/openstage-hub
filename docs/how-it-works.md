@@ -29,7 +29,7 @@ The hub reads one small signed file instead of asking GitHub about each app: the
 2. Check its SHA-256 against the catalog. A mismatch deletes the file and stops. From before the checksum until step 5 has started it, the file is held open so that no other program can change, move or replace it.
 3. Check its code signature with Windows' own check (WinVerifyTrust, with revocation): valid, timestamped, and the certificate `brand.json` describes: the signer's name, parts of its full subject (`signerSubject`), the authority that issued it (`signerIssuers`) and the identity number that authority gave the signer (`signerIdentities`), which another person of the same name would not have. Anything else deletes the file and stops. None of this comes from the catalog.
 4. If the app is running, ask the person to close it and wait. The hub never closes an app itself.
-5. Run the installer with its quiet switch (from the catalog), which shows the installer's own progress bar rather than its pages. Installs are per user; an installer that asks for administrator rights is not run.
+5. Run the installer with its quiet switch (from the catalog), which shows the installer's own progress bar rather than its pages. Over an app that is already installed, an installer that takes `/P` is also given `/UPDATE`: without it, one that finds the same version number in Windows (Reinstall, or one preview to the next) would run the old uninstaller first, which takes away the app's shortcuts and start-up entry and, in some apps, its settings. Installs are per user; an installer that asks for administrator rights is not run.
 6. Read the installed version back from Windows' per-user installed apps list and confirm it, then delete the download.
 
 Cancel works while downloading, checking or waiting; not while the installer itself runs.
@@ -60,7 +60,7 @@ Uninstalling the hub removes the hub, its start-up entry, its cached catalog and
 
 ## The hub's own updates
 
-The catalog's `hub` entry names the hub's newest release. When it is newer and no app has an update, the window shows "A new version of the hub is ready" with an Update button; when apps have updates too, Update all does the hub last (above). The hub runs steps 1 to 3 on its own installer, starts it (with `/P` and `/R`) and closes; the installer shows its progress bar and starts the new hub. If that installer fails, the hub that was there stays installed and is opened from the Start menu. After the restart it says "The hub was updated to ..." once.
+The catalog's `hub` entry names the hub's newest release. When it is newer and no app has an update, the window shows "A new version of the hub is ready" with an Update button; when apps have updates too, Update all does the hub last (above). The hub runs steps 1 to 3 on its own installer, starts it (with `/P`, `/R` and `/UPDATE`, which keeps the hub's settings and start-up entry) and closes; the installer shows its progress bar and starts the new hub. If that installer fails, the hub that was there stays installed and is opened from the Start menu. After the restart it says "The hub was updated to ..." once.
 
 ## The tray and Start with Windows
 

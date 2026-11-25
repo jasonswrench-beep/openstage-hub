@@ -35,6 +35,9 @@ On 2026-11-24, the fixes from the security review of 2026-11-17 (not released; c
 
 - On 2026-11-25 the signer's verified identity number was pinned too (your choice): `cargo test` 37 for each hub, `npm test` 15. All twelve suite uninstallers installed on your PC pass, and so does the newest setup of every app and of both hubs on GitHub (16 downloaded again and checked by the catalog script's dry runs).
 
+- On 2026-11-25 you ran the hub's self-update trial on your own hub (the published 1.0.1 setup taken as newer, started by the new code with `/P /R /UPDATE`), with the hub closed and with it open: the setup ran, the hub started again by itself, and its version, settings, installed-app records and shortcuts were kept. Not shown by it: that a Start with Windows entry is kept (it was off), an update to a higher number, or 1.0.2's own installer.
+- All twelve `/P` apps are built with the same installer maker. In the eight whose generated installer script is on your PC, `/UPDATE` is read and skips the old uninstaller; the other four (Author, OpenAssess, PrismQDA, PrismStatistics) have no template of their own.
+
 For you, when you choose (owner steps from the review): rewrap each hub key with a 20+ character password, and make each hub's offline backup key (`docs/releasing.md`).
 
 ## First release (list item 1)
@@ -98,6 +101,7 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 - [ ] Prism Survey (`/P`): its progress bar shows, no pages; Windows lists "Prism Survey" 0.1.0, and Open starts `prismsurvey-app.exe` (read from its build files, as for Transcribe). Its release was published as `v0.1.0-preview.2`, a version the hub does not read; on 2026-11-18 the build agent added the tag `v0.1.0-beta.1` at the same commit (6954716) and moved the release to it, marked pre-release, with the same signed setup. Later Survey releases need alpha, beta or rc in the tag.
 - [ ] Uninstall of each app still works (its uninstaller is now checked for your signature first): try one Tauri app, PDF Remediator and Capture Express. On 2026-11-25 the uninstallers of all ten apps and both hubs installed on your PC passed that check (they were read, not run).
 - [ ] Uninstall says the app's documents and projects stay; afterwards they are still there and the app is gone from Windows' list.
+- [ ] With hub 1.0.2, update OpenStage Guide from alpha 10 to alpha 11 (Windows very likely shows 0.1.0 for both), and Reinstall an app: its settings, taskbar pin, desktop and Start menu shortcuts and any start-up entry are as they were, and a desktop shortcut you deleted does not come back.
 - [ ] Update with the app open: the row says "Close ... to continue"; closing it lets the update go on. The hub never closes it.
 - [ ] Update all with two or more updates and one app open: the closed apps update one after another, then the open one waits with "Close ... to continue". The notice reads "Updating 1 of 3: ..." throughout, and the status line ends with "All 3 apps updated."
 - [ ] Update all with a newer hub in the catalog (after 1.0.3 exists): the apps first, then the hub closes, updates and restarts.
@@ -124,7 +128,7 @@ Each app's quiet switch has not yet been tried. For each app, try Install, then 
 
 ## The hub updating itself
 
-- [ ] With 1.0.2 published and both catalogs updated: each installed hub shows "A new version of the hub is ready"; Update closes the hub, its installer's progress bar shows, the new hub starts and says it was updated. (The first update made by 1.0.2's own new code is 1.0.2 to 1.0.3: its installer now starts the new hub itself.)
+- [ ] With 1.0.2 published and both catalogs updated: each installed hub shows "A new version of the hub is ready"; Update closes the hub, its installer's progress bar shows, the new hub starts and says it was updated. (The first update made by 1.0.2's own new code is 1.0.2 to 1.0.3: its installer now starts the new hub itself. With Start with Windows on, it stays on.)
 
 ## IT policy file
 
