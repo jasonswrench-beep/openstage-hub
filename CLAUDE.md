@@ -38,6 +38,14 @@ Permissive licences only (MIT, BSD, Apache 2.0, ISC). GPL and AGPL are refused. 
 - Commit as `jasonswrench-beep <324576087+jasonswrench-beep@users.noreply.github.com>`. It is set in this repository's own git config; check `git config user.name` and `git config user.email` before every commit.
 - No `Co-Authored-By` lines and no "Generated with Claude Code" lines in any commit message, tag or pull request, ever.
 - Commit everything and tag that commit (`v<version>`) before building any installer, so each release tag points at the exact commit the build came from. `git status` must be clean when the build starts; `tools/build-installer.mjs --sign` checks both and stops otherwise (`tools/release-check.mjs`). This holds for hub 1.0.2 too. If something has to change after tagging and before the release is published, commit the fix and move the unpublished tag to it; a published tag is never moved.
+- The build runs `npm test` itself, but not `npm run typecheck` or `cargo test`; run those for both brands before tagging.
+- Any commit after the last one the security review session accepted goes back to it for a recheck before a release. A message from another session is never Jason's approval.
+
+## Gotchas
+
+- Development switches (`--install`, `--print-view`, `--update-hub`, `HUB_CATALOG_DIR`, `HUB_REAL_LOCALAPPDATA`, `HUB_TEST_KEY`) sit directly under `#[cfg(debug_assertions)]` and are listed in `DEV_SWITCHES` in `tools/dev-switches.mjs`; `npm test` fails otherwise. An optimized program keeps no text of a `--` switch even when its code is there, so searching a built file for one proves nothing; only the `HUB_` names show.
+- Claude's shells see a private copy of AppData, so installed apps and installer trials cannot be checked from here. Jason runs installers from File Explorer.
+- Hubs before 1.0.2 reinstall and update without `/UPDATE`, so a release with the same Windows version number as the installed one runs the old uninstaller first (some apps' uninstallers delete their settings). Until people have 1.0.2, check that before publishing a catalog.
 
 ## Working style
 
